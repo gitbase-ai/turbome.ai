@@ -3,17 +3,17 @@
 import * as React from "react"
 import {
   FileText,
-  Search,
   MessageSquare,
   Clock,
   Settings2,
   Code,
   FolderTree,
-  GitBranch,
+  LayoutDashboard,
+  TestTube,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
+import { NavAnalytics } from "@/components/nav-analytics"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
@@ -40,10 +40,15 @@ const data = {
   ],
   navMain: [
     {
+      title: "Workspace",
+      url: "/workspace",
+      icon: LayoutDashboard,
+      isActive: true,
+    },
+    {
       title: "Explore",
       url: "/explore",
       icon: FolderTree,
-      isActive: true,
       items: [
         {
           title: "All Files",
@@ -60,6 +65,26 @@ const data = {
       ],
     },
     {
+      title: "Test",
+      url: "/test",
+      icon: TestTube,
+      isActive: false,
+      items: [
+        {
+          title: "Test 1",
+          url: "/test/1",
+        },
+        {
+          title: "Test 2",
+          url: "/test/2",
+        },
+        {
+          title: "Test 3",
+          url: "/test/3",
+        },
+      ],
+    },
+    {
       title: "Conversation",
       url: "/conversation",
       icon: MessageSquare,
@@ -71,21 +96,6 @@ const data = {
         {
           title: "History",
           url: "/conversation/history",
-        },
-      ],
-    },
-    {
-      title: "Analytics",
-      url: "/timeline",
-      icon: Clock,
-      items: [
-        {
-          title: "Timeline",
-          url: "/timeline",
-        },
-        {
-          title: "Git History",
-          url: "/timeline?view=git",
         },
       ],
     },
@@ -114,11 +124,11 @@ const data = {
       ],
     },
   ],
-  projects: [
+  analytics: [
     {
-      name: "Current Workspace",
-      url: "/dashboard",
-      icon: GitBranch,
+      name: "Timeline",
+      url: "/timeline",
+      icon: Clock,
     },
   ],
 }
@@ -131,7 +141,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavAnalytics analytics={data.analytics} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />

@@ -28,6 +28,7 @@
     "@turbome/shared": "file:../shared",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "lucide-react": "^0.548.0",
     "next": "15.5.3",
     "react": "19.1.0",

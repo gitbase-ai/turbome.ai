@@ -9,7 +9,7 @@ import { V2WorkspaceService } from './workspace.service';
 import { V2Workspace } from '@shared/index';
 
 @ApiTags('V2 Workspaces')
-@Controller('v2/repo')
+@Controller('v2/repos')
 export class V2WorkspaceController {
   constructor(private readonly workspaceService: V2WorkspaceService) {}
 

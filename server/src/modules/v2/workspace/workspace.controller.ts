@@ -9,56 +9,24 @@ import { V2WorkspaceService } from './workspace.service';
 import { V1Workspace } from '@shared/index';
 
 @ApiTags('V2 Workspaces')
-@Controller('v2/repos')
+@Controller('v2/repo')
 export class V2WorkspaceController {
   constructor(private readonly workspaceService: V2WorkspaceService) {}
 
-  // 枚举三种路径层级 - Workspaces
-  @Get(':part1/:part2/:part3/workspaces')
+  @Get(':domain/:owner/:repo/workspaces')
   @ApiOperation({
-    summary: 'Get workspaces for repository (3-part URL)',
+    summary: 'Get workspaces for repository',
     description: 'Get workspaces for repository URL like github.com/user/repo',
   })
-  async getWorkspaces3Parts(
-    @Param('part1') part1: string,
-    @Param('part2') part2: string,
-    @Param('part3') part3: string,
+  async getWorkspaces(
+    @Param('domain') domain: string,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
     @Query('limit') limit?: string,
     @Query('include_hidden') includeHidden?: string,
     @Query('file_types') fileTypes?: string,
   ): Promise<V1Workspace.WorkspaceResponse> {
-    const url = `${part1}/${part2}/${part3}`;
-    return this.getWorkspacesInternal(url, limit, includeHidden, fileTypes);
-  }
-
-  @Get(':part1/:part2/workspaces')
-  @ApiOperation({
-    summary: 'Get workspaces for repository (2-part URL)',
-    description: 'Get workspaces for repository URL like domain.com/repo',
-  })
-  async getWorkspaces2Parts(
-    @Param('part1') part1: string,
-    @Param('part2') part2: string,
-    @Query('limit') limit?: string,
-    @Query('include_hidden') includeHidden?: string,
-    @Query('file_types') fileTypes?: string,
-  ): Promise<V1Workspace.WorkspaceResponse> {
-    const url = `${part1}/${part2}`;
-    return this.getWorkspacesInternal(url, limit, includeHidden, fileTypes);
-  }
-
-  @Get(':part1/workspaces')
-  @ApiOperation({
-    summary: 'Get workspaces for repository (1-part URL)',
-    description: 'Get workspaces for repository URL like localhost',
-  })
-  async getWorkspaces1Part(
-    @Param('part1') part1: string,
-    @Query('limit') limit?: string,
-    @Query('include_hidden') includeHidden?: string,
-    @Query('file_types') fileTypes?: string,
-  ): Promise<V1Workspace.WorkspaceResponse> {
-    const url = part1;
+    const url = `${domain}/${owner}/${repo}`;
     return this.getWorkspacesInternal(url, limit, includeHidden, fileTypes);
   }
 

@@ -20,41 +20,17 @@ export class ReposController {
     return { repos };
   }
 
-  // Repository info routes - 枚举三种路径层级
-  @Get(':part1/:part2/:part3')
+  @Get(':domain/:owner/:repo')
   @ApiOperation({
-    summary: 'Get repository by URL (3-part)',
+    summary: 'Get repository by URL',
     description: 'Get repository info for URL like github.com/user/repo',
   })
-  async getRepo3Parts(
-    @Param('part1') part1: string,
-    @Param('part2') part2: string,
-    @Param('part3') part3: string,
+  async getRepoByUrl(
+    @Param('domain') domain: string,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
   ): Promise<V2Repo.RepoInfo> {
-    const url = `${part1}/${part2}/${part3}`;
-    return await this.reposService.getRepoByUrl(url);
-  }
-
-  @Get(':part1/:part2')
-  @ApiOperation({
-    summary: 'Get repository by URL (2-part)',
-    description: 'Get repository info for URL like domain.com/repo',
-  })
-  async getRepo2Parts(
-    @Param('part1') part1: string,
-    @Param('part2') part2: string,
-  ): Promise<V2Repo.RepoInfo> {
-    const url = `${part1}/${part2}`;
-    return await this.reposService.getRepoByUrl(url);
-  }
-
-  @Get(':part1')
-  @ApiOperation({
-    summary: 'Get repository by URL (1-part)',
-    description: 'Get repository info for URL like localhost',
-  })
-  async getRepo1Part(@Param('part1') part1: string): Promise<V2Repo.RepoInfo> {
-    const url = part1;
+    const url = `${domain}/${owner}/${repo}`;
     return await this.reposService.getRepoByUrl(url);
   }
 

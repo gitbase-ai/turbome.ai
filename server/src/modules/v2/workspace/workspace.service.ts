@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { V1Workspace } from '@shared/index';
+import { V2Workspace } from '@shared/index';
 import * as path from 'path';
 import { ConfigService } from '../config/config.service';
 
@@ -17,8 +17,8 @@ export class V2WorkspaceService {
    */
   async getWorkspacesByRepoUrl(
     repoUrl: string,
-    query: V1Workspace.WorkspaceQuery = {},
-  ): Promise<V1Workspace.WorkspaceResponse> {
+    query: V2Workspace.V2WorkspaceQuery = {},
+  ): Promise<V2Workspace.V2WorkspaceResponse> {
     try {
       // 读取配置文件
       const config = await this.configService.readLocalConfig();
@@ -32,8 +32,8 @@ export class V2WorkspaceService {
           success: false,
           data: {
             workspaces: [],
-            total_workspaces: 0,
-            total_files: 0,
+            totalWorkspaces: 0,
+            totalFiles: 0,
           },
           message: `Repository with URL "${repoUrl}" not found in config`,
         };
@@ -47,8 +47,8 @@ export class V2WorkspaceService {
         success: false,
         data: {
           workspaces: [],
-          total_workspaces: 0,
-          total_files: 0,
+          totalWorkspaces: 0,
+          totalFiles: 0,
         },
         message:
           error instanceof Error
@@ -64,22 +64,22 @@ export class V2WorkspaceService {
    */
   private async scanWorkspaces(
     storageDir: string,
-    query: V1Workspace.WorkspaceQuery = {},
-  ): Promise<V1Workspace.WorkspaceResponse> {
+    query: V2Workspace.V2WorkspaceQuery = {},
+  ): Promise<V2Workspace.V2WorkspaceResponse> {
     try {
-      const { limit = 100, include_hidden = false, file_types = [] } = query;
+      const { limit = 100, includeHidden = false, fileTypes = [] } = query;
 
       // Build grep command to find workspace: metadata in first 10 lines
       let grepCommand = `grep -rn "^workspace:" "${storageDir}"`;
 
       // Exclude hidden directories and files if not requested
-      if (!include_hidden) {
+      if (!includeHidden) {
         grepCommand += ' --exclude-dir=".*"';
       }
 
       // Add file type includes
-      if (file_types.length > 0) {
-        const includes = file_types.map((ext) => `--include="*.${ext}"`).join(' ');
+      if (fileTypes.length > 0) {
+        const includes = fileTypes.map((ext) => `--include="*.${ext}"`).join(' ');
         grepCommand += ` ${includes}`;
       }
 
@@ -92,7 +92,7 @@ export class V2WorkspaceService {
       });
 
       const lines = stdout.split('\n').filter((line) => line.trim());
-      const workspaceFiles: V1Workspace.WorkspaceFile[] = [];
+      const workspaceFiles: V2Workspace.V2WorkspaceFile[] = [];
 
       for (const line of lines) {
         if (!line) continue;
@@ -125,7 +125,7 @@ export class V2WorkspaceService {
       }
 
       // Group files by workspace
-      const workspaceMap = new Map<string, V1Workspace.WorkspaceFile[]>();
+      const workspaceMap = new Map<string, V2Workspace.V2WorkspaceFile[]>();
 
       for (const file of workspaceFiles) {
         if (!workspaceMap.has(file.workspace)) {
@@ -135,7 +135,7 @@ export class V2WorkspaceService {
       }
 
       // Convert to workspace groups
-      const workspaces: V1Workspace.WorkspaceGroup[] = Array.from(
+      const workspaces: V2Workspace.V2WorkspaceGroup[] = Array.from(
         workspaceMap.entries(),
       )
         .map(([workspace, files]) => ({
@@ -149,8 +149,8 @@ export class V2WorkspaceService {
         success: true,
         data: {
           workspaces,
-          total_workspaces: workspaces.length,
-          total_files: workspaceFiles.length,
+          totalWorkspaces: workspaces.length,
+          totalFiles: workspaceFiles.length,
         },
       };
     } catch (error) {
@@ -159,8 +159,8 @@ export class V2WorkspaceService {
         success: false,
         data: {
           workspaces: [],
-          total_workspaces: 0,
-          total_files: 0,
+          totalWorkspaces: 0,
+          totalFiles: 0,
         },
         message:
           error instanceof Error ? error.message : 'Workspace search failed',

@@ -6,7 +6,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { V2WorkspaceService } from './workspace.service';
-import { V1Workspace } from '@shared/index';
+import { V2Workspace } from '@shared/index';
 
 @ApiTags('V2 Workspaces')
 @Controller('v2/repo')
@@ -23,9 +23,9 @@ export class V2WorkspaceController {
     @Param('owner') owner: string,
     @Param('repo') repo: string,
     @Query('limit') limit?: string,
-    @Query('include_hidden') includeHidden?: string,
-    @Query('file_types') fileTypes?: string,
-  ): Promise<V1Workspace.WorkspaceResponse> {
+    @Query('includeHidden') includeHidden?: string,
+    @Query('fileTypes') fileTypes?: string,
+  ): Promise<V2Workspace.V2WorkspaceResponse> {
     const url = `${domain}/${owner}/${repo}`;
     return this.getWorkspacesInternal(url, limit, includeHidden, fileTypes);
   }
@@ -36,7 +36,7 @@ export class V2WorkspaceController {
     limit?: string,
     includeHidden?: string,
     fileTypes?: string,
-  ): Promise<V1Workspace.WorkspaceResponse> {
+  ): Promise<V2Workspace.V2WorkspaceResponse> {
     try {
       const parsedLimit = limit ? parseInt(limit, 10) : 100;
       const parsedIncludeHidden = includeHidden === 'true';
@@ -47,10 +47,10 @@ export class V2WorkspaceController {
             .filter((ext) => ext.length > 0)
         : [];
 
-      const workspaceQuery: V1Workspace.WorkspaceQuery = {
+      const workspaceQuery: V2Workspace.V2WorkspaceQuery = {
         limit: parsedLimit,
-        include_hidden: parsedIncludeHidden,
-        file_types: parsedFileTypes,
+        includeHidden: parsedIncludeHidden,
+        fileTypes: parsedFileTypes,
       };
 
       return await this.workspaceService.getWorkspacesByRepoUrl(
@@ -63,8 +63,8 @@ export class V2WorkspaceController {
         success: false,
         data: {
           workspaces: [],
-          total_workspaces: 0,
-          total_files: 0,
+          totalWorkspaces: 0,
+          totalFiles: 0,
         },
         message:
           error instanceof Error

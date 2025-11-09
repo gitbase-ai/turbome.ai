@@ -5,7 +5,7 @@ import * as os from 'os';
 import { V2Repo } from '@shared/index';
 
 export interface TurboMeConfig {
-  repos?: V2Repo.RepoInfo[];
+  repos?: V2Repo.V2RepoInfo[];
   repo?: string; // 当前选中的 repo URL
 }
 

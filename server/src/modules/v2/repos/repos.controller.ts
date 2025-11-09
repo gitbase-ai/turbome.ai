@@ -15,7 +15,7 @@ export class ReposController {
   @Get()
   @ApiOperation({ summary: 'Get all repos' })
   @ApiResponse({ status: 200, description: 'Returns list of repos' })
-  async getRepos(): Promise<V2Repo.ReposListResponse> {
+  async getRepos(): Promise<V2Repo.V2ReposListResponse> {
     const repos = await this.reposService.getReposList();
     return { repos };
   }
@@ -29,7 +29,7 @@ export class ReposController {
     @Param('domain') domain: string,
     @Param('owner') owner: string,
     @Param('repo') repo: string,
-  ): Promise<V2Repo.RepoInfo> {
+  ): Promise<V2Repo.V2RepoInfo> {
     const url = `${domain}/${owner}/${repo}`;
     return await this.reposService.getRepoByUrl(url);
   }
@@ -37,7 +37,7 @@ export class ReposController {
   @Post()
   @ApiOperation({ summary: 'Add a new repo' })
   @ApiResponse({ status: 201, description: 'Repo added successfully' })
-  async addRepo(@Body('path') path: string): Promise<V2Repo.ReposListResponse> {
+  async addRepo(@Body('path') path: string): Promise<V2Repo.V2ReposListResponse> {
     const repos = await this.reposService.addRepo(path);
     return { repos };
   }
@@ -45,7 +45,7 @@ export class ReposController {
   @Delete()
   @ApiOperation({ summary: 'Remove a repo' })
   @ApiResponse({ status: 200, description: 'Repo removed successfully' })
-  async removeRepo(@Body('path') path: string): Promise<V2Repo.ReposListResponse> {
+  async removeRepo(@Body('path') path: string): Promise<V2Repo.V2ReposListResponse> {
     const repos = await this.reposService.removeRepo(path);
     return { repos };
   }

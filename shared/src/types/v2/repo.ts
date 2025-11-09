@@ -2,7 +2,7 @@
  * V2 Repository Types
  */
 
-export interface RepoInfo {
+export interface V2RepoInfo {
   /**
    * Original git remote origin URL (raw value from git config)
    */
@@ -21,11 +21,11 @@ export interface RepoInfo {
   localPath: string;
 }
 
-export interface ReposListResponse {
-  repos: RepoInfo[];
+export interface V2ReposListResponse {
+  repos: V2RepoInfo[];
 }
 
-export interface RepoResponse {
+export interface V2RepoResponse {
   origin: string;
   url: string;
   localPath: string;

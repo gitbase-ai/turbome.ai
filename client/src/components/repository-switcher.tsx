@@ -23,8 +23,8 @@ import { V2RepoService } from "@/services/V2RepoService"
 
 export function RepositorySwitcher() {
   const { isMobile } = useSidebar()
-  const [repositories, setRepositories] = React.useState<V2Repo.RepoInfo[]>([])
-  const [activeRepo, setActiveRepo] = React.useState<V2Repo.RepoInfo | null>(null)
+  const [repositories, setRepositories] = React.useState<V2Repo.V2RepoInfo[]>([])
+  const [activeRepo, setActiveRepo] = React.useState<V2Repo.V2RepoInfo | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false)
 
@@ -64,7 +64,7 @@ export function RepositorySwitcher() {
     }
   }
 
-  const getRepoName = (repo: V2Repo.RepoInfo | null | undefined): string => {
+  const getRepoName = (repo: V2Repo.V2RepoInfo | null | undefined): string => {
     if (!repo || !repo.url) {
       return 'Unknown'
     }

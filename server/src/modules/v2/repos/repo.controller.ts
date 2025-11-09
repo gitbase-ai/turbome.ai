@@ -42,7 +42,7 @@ export class RepoController {
     status: 400,
     description: 'No current repository set or repository not found',
   })
-  async getCurrentRepo(): Promise<V2Repo.RepoInfo> {
+  async getCurrentRepo(): Promise<V2Repo.V2RepoInfo> {
     return await this.reposService.getCurrentRepo();
   }
 
@@ -79,7 +79,7 @@ export class RepoController {
     status: 400,
     description: 'Not a git repository or no remote origin found',
   })
-  async getLocalRepo(): Promise<V2Repo.RepoInfo> {
+  async getLocalRepo(): Promise<V2Repo.V2RepoInfo> {
     return await this.reposService.getLocalRepo();
   }
 }

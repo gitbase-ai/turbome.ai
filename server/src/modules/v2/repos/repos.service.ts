@@ -10,7 +10,7 @@ export class ReposService {
   /**
    * 获取 repos 列表
    */
-  async getReposList(): Promise<V2Repo.RepoInfo[]> {
+  async getReposList(): Promise<V2Repo.V2RepoInfo[]> {
     const config = await this.configService.readLocalConfig();
     return config.repos || [];
   }
@@ -18,7 +18,7 @@ export class ReposService {
   /**
    * 根据 URL 获取指定的 repo 信息
    */
-  async getRepoByUrl(url: string): Promise<V2Repo.RepoInfo> {
+  async getRepoByUrl(url: string): Promise<V2Repo.V2RepoInfo> {
     const config = await this.configService.readLocalConfig();
     const repos = config.repos || [];
 
@@ -34,7 +34,7 @@ export class ReposService {
   /**
    * 添加 repo
    */
-  async addRepo(repoPath: string): Promise<V2Repo.RepoInfo[]> {
+  async addRepo(repoPath: string): Promise<V2Repo.V2RepoInfo[]> {
     const config = await this.configService.readLocalConfig();
     if (!config.repos) {
       config.repos = [];
@@ -71,7 +71,7 @@ export class ReposService {
   /**
    * 删除 repo
    */
-  async removeRepo(repoPath: string): Promise<V2Repo.RepoInfo[]> {
+  async removeRepo(repoPath: string): Promise<V2Repo.V2RepoInfo[]> {
     const config = await this.configService.readLocalConfig();
     if (config.repos) {
       config.repos = config.repos.filter((r) => r.localPath !== repoPath);
@@ -84,7 +84,7 @@ export class ReposService {
   /**
    * 获取配置文件中设置的当前 repo
    */
-  async getCurrentRepo(): Promise<V2Repo.RepoInfo> {
+  async getCurrentRepo(): Promise<V2Repo.V2RepoInfo> {
     const config = await this.configService.readLocalConfig();
 
     // 读取当前选中的 repo URL
@@ -109,7 +109,7 @@ export class ReposService {
   /**
    * 获取当前工作目录的 git repo 信息
    */
-  async getLocalRepo(): Promise<V2Repo.RepoInfo> {
+  async getLocalRepo(): Promise<V2Repo.V2RepoInfo> {
     const cwd = process.cwd();
     const gitUtil = new GitUtil(cwd);
 

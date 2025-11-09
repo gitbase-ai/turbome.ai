@@ -6,16 +6,34 @@ import { V2Repo } from '@shared/index';
  */
 export class V2RepoService {
   private static readonly BASE_URL = '/api/v2';
+  private static currentRepoCache: V2Repo.RepoInfo | null = null;
+  private static reposListCache: V2Repo.ReposListResponse | null = null;
 
   /**
-   * Get current active repository from config
+   * Get current active repository from config (with cache)
    */
-  static async getCurrentRepo(): Promise<V2Repo.RepoInfo> {
+  static async getCurrentRepo(forceRefresh = false): Promise<V2Repo.RepoInfo> {
+    // 如果有缓存且不强制刷新，直接返回缓存
+    if (!forceRefresh && this.currentRepoCache) {
+      return this.currentRepoCache;
+    }
+
     const response = await fetch(`${this.BASE_URL}/repo`);
     if (!response.ok) {
       throw new Error('Failed to fetch current repository');
     }
-    return await response.json();
+    const data = await response.json();
+
+    // 缓存结果
+    this.currentRepoCache = data;
+    return data;
+  }
+
+  /**
+   * Clear current repo cache
+   */
+  static clearCurrentRepoCache(): void {
+    this.currentRepoCache = null;
   }
 
   /**
@@ -30,14 +48,30 @@ export class V2RepoService {
   }
 
   /**
-   * Get all repositories from config
+   * Get all repositories from config (with cache)
    */
-  static async getReposList(): Promise<V2Repo.ReposListResponse> {
+  static async getReposList(forceRefresh = false): Promise<V2Repo.ReposListResponse> {
+    // 如果有缓存且不强制刷新，直接返回缓存
+    if (!forceRefresh && this.reposListCache) {
+      return this.reposListCache;
+    }
+
     const response = await fetch(`${this.BASE_URL}/repos`);
     if (!response.ok) {
       throw new Error('Failed to fetch repositories list');
     }
-    return await response.json();
+    const data = await response.json();
+
+    // 缓存结果
+    this.reposListCache = data;
+    return data;
+  }
+
+  /**
+   * Clear repos list cache
+   */
+  static clearReposListCache(): void {
+    this.reposListCache = null;
   }
 
   /**
@@ -54,7 +88,11 @@ export class V2RepoService {
     if (!response.ok) {
       throw new Error('Failed to add repository');
     }
-    return await response.json();
+    const data = await response.json();
+
+    // 清除缓存，因为列表已更新
+    this.clearReposListCache();
+    return data;
   }
 
   /**
@@ -71,6 +109,18 @@ export class V2RepoService {
     if (!response.ok) {
       throw new Error('Failed to remove repository');
     }
-    return await response.json();
+    const data = await response.json();
+
+    // 清除缓存，因为列表已更新
+    this.clearReposListCache();
+    return data;
+  }
+
+  /**
+   * Clear all caches
+   */
+  static clearAllCaches(): void {
+    this.currentRepoCache = null;
+    this.reposListCache = null;
   }
 }

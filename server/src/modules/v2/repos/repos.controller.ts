@@ -1,5 +1,9 @@
-import { Controller, Get, Post, Delete, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { ReposService } from './repos.service';
 import { V2Repo } from '@shared/index';
 
@@ -14,6 +18,44 @@ export class ReposController {
   async getRepos(): Promise<V2Repo.ReposListResponse> {
     const repos = await this.reposService.getReposList();
     return { repos };
+  }
+
+  // Repository info routes - 枚举三种路径层级
+  @Get(':part1/:part2/:part3')
+  @ApiOperation({
+    summary: 'Get repository by URL (3-part)',
+    description: 'Get repository info for URL like github.com/user/repo',
+  })
+  async getRepo3Parts(
+    @Param('part1') part1: string,
+    @Param('part2') part2: string,
+    @Param('part3') part3: string,
+  ): Promise<V2Repo.RepoInfo> {
+    const url = `${part1}/${part2}/${part3}`;
+    return await this.reposService.getRepoByUrl(url);
+  }
+
+  @Get(':part1/:part2')
+  @ApiOperation({
+    summary: 'Get repository by URL (2-part)',
+    description: 'Get repository info for URL like domain.com/repo',
+  })
+  async getRepo2Parts(
+    @Param('part1') part1: string,
+    @Param('part2') part2: string,
+  ): Promise<V2Repo.RepoInfo> {
+    const url = `${part1}/${part2}`;
+    return await this.reposService.getRepoByUrl(url);
+  }
+
+  @Get(':part1')
+  @ApiOperation({
+    summary: 'Get repository by URL (1-part)',
+    description: 'Get repository info for URL like localhost',
+  })
+  async getRepo1Part(@Param('part1') part1: string): Promise<V2Repo.RepoInfo> {
+    const url = part1;
+    return await this.reposService.getRepoByUrl(url);
   }
 
   @Post()

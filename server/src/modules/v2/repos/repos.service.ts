@@ -16,6 +16,22 @@ export class ReposService {
   }
 
   /**
+   * 根据 URL 获取指定的 repo 信息
+   */
+  async getRepoByUrl(url: string): Promise<V2Repo.RepoInfo> {
+    const config = await this.configService.readLocalConfig();
+    const repos = config.repos || [];
+
+    const repo = repos.find((r) => r.url === url);
+
+    if (!repo) {
+      throw new Error(`Repository with URL "${url}" not found`);
+    }
+
+    return repo;
+  }
+
+  /**
    * 添加 repo
    */
   async addRepo(repoPath: string): Promise<V2Repo.RepoInfo[]> {

@@ -46,9 +46,10 @@ export function RepositorySwitcher() {
 
   // 仅在用户点击下拉菜单时获取所有 repos
   const fetchRepositories = async () => {
-    if (repositories.length > 0) return // 已经加载过了
+    if (repositories.length > 0) return // 组件级缓存，避免重复加载
 
     try {
+      // 使用 Service 层的缓存
       const data = await V2RepoService.getReposList()
       setRepositories(data.repos || [])
     } catch (error) {

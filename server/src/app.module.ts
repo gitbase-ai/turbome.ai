@@ -14,6 +14,7 @@ import { V1SearchModule } from './modules/v1/search/search.module';
 import { V1WorkspaceModule } from './modules/v1/workspace/workspace.module';
 import { V1FilesModule } from './modules/v1/files/files.module';
 import { V2RepoModule } from './modules/v2/repos/repos.module';
+import { V2WorkspaceModule } from './modules/v2/workspace/workspace.module';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -29,6 +30,7 @@ const isProd = process.env.NODE_ENV === 'production';
     V1SearchModule,
     V1WorkspaceModule,
     V1FilesModule,
+    V2WorkspaceModule,
     V2RepoModule,
     // 生产环境下提供静态文件服务
     ...(isProd ? [

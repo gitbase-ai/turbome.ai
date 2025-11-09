@@ -2,6 +2,12 @@
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
+import {
+  FileAccordion,
+  FileAccordionContent,
+  FileAccordionItem,
+  FileAccordionTrigger,
+} from "./file-accordion"
 
 interface Tab {
   id: string
@@ -74,7 +80,7 @@ export function MultiSelectTabs({
 
       {/* Content based on selected tabs */}
       <div
-        className="grid gap-4"
+        className="grid gap-4 items-start"
         style={{
           gridTemplateColumns: `repeat(${selectedTabs.length}, minmax(0, 1fr))`
         }}
@@ -87,9 +93,25 @@ export function MultiSelectTabs({
               className="rounded-xl border bg-card p-6 text-card-foreground shadow"
             >
               <h3 className="text-lg font-semibold mb-4">{tab?.label}</h3>
-              <div className="bg-muted/50 min-h-[200px] rounded-lg flex items-center justify-center text-muted-foreground">
-                Content for {tab?.label}
-              </div>
+              <FileAccordion type="multiple" className="w-full">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <FileAccordionItem key={i} value={`item-${i + 1}`}>
+                    <FileAccordionTrigger
+                      onArchive={() => {
+                        console.log(`Archive ${tab?.label} Item ${i + 1}`)
+                      }}
+                    >
+                      {tab?.label} Item {i + 1}
+                    </FileAccordionTrigger>
+                    <FileAccordionContent>
+                      <div className="text-sm text-muted-foreground">
+                        This is the content for {tab?.label} Item {i + 1}. You can add
+                        any content here.
+                      </div>
+                    </FileAccordionContent>
+                  </FileAccordionItem>
+                ))}
+              </FileAccordion>
             </div>
           )
         })}

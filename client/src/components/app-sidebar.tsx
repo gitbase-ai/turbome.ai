@@ -15,7 +15,7 @@ import {
 import { NavMain } from "@/components/nav-main"
 import { NavAnalytics } from "@/components/nav-analytics"
 import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
+import { RepositorySwitcher } from "@/components/repository-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -137,7 +137,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <RepositorySwitcher />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />

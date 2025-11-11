@@ -90,4 +90,25 @@ export class ConfigService implements OnModuleInit {
     // 更新缓存
     this.configCache = JSON.parse(JSON.stringify(config));
   }
+
+  /**
+   * 获取所有仓库列表
+   */
+  async getRepos(): Promise<V2Repo.V2RepoInfo[]> {
+    const config = await this.readLocalConfig();
+    return config.repos || [];
+  }
+
+  /**
+   * 获取当前选中的仓库
+   */
+  async getCurrentRepo(): Promise<V2Repo.V2RepoInfo | null> {
+    const config = await this.readLocalConfig();
+    if (!config.repo) {
+      return null;
+    }
+
+    const repos = config.repos || [];
+    return repos.find(r => r.url === config.repo) || null;
+  }
 }

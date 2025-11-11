@@ -9,6 +9,8 @@ export * as V1Workspace from './types/v1/workspace';
 export * as V1Files from './types/v1/files';
 export * as V2Repo from './types/v2/repo';
 export * as V2Workspace from './types/v2/workspace';
+export * as V2Content from './types/v2/content';
+export * as V2Search from './types/v2/search';
 export * from './dto/user.dto';
 export * from './utils/constants';
 export * from './utils/files-api-client';

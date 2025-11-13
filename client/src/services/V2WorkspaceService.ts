@@ -104,13 +104,58 @@ export class V2WorkspaceService {
   }
 
   /**
-   * Get all workspace selection states for a repo
+   * Get all workspace selection states for a repo (from cache only)
    * @param repoUrl Repo URL in format "domain/owner/repo"
    * @returns Record of workspace name to selected state
    */
   static getWorkspaces(repoUrl: string): Record<string, boolean> {
     const state = this.loadUIState(repoUrl);
     return state?.workspaces || {};
+  }
+
+  /**
+   * Get all workspace names for a repo with API fallback
+   * First tries to read from localStorage cache, if empty, fetches from API and caches it
+   * @param repoUrl Repo URL in format "domain/owner/repo"
+   * @returns Promise<string[]> Array of workspace names
+   */
+  static async getWorkspaceNames(repoUrl: string): Promise<string[]> {
+    // Try to get from cache first
+    const cachedWorkspaces = this.getWorkspaces(repoUrl);
+    const cachedNames = Object.keys(cachedWorkspaces);
+
+    if (cachedNames.length > 0) {
+      return cachedNames;
+    }
+
+    // If cache is empty, fetch from API
+    try {
+      const urlParts = repoUrl.split('/');
+      if (urlParts.length !== 3) {
+        console.error('Invalid repo URL format:', repoUrl);
+        return [];
+      }
+
+      const [domain, owner, repo] = urlParts;
+      const response = await this.getWorkspacesByRepoUrl(domain, owner, repo, { limit: 100 });
+
+      if (response.success) {
+        const workspaceNames = response.data.workspaces.map(ws => ws.workspace);
+
+        // Cache the workspaces (mark all as unselected by default)
+        const workspacesState: Record<string, boolean> = {};
+        workspaceNames.forEach(name => {
+          workspacesState[name] = false;
+        });
+        this.setWorkspaces(repoUrl, workspacesState);
+
+        return workspaceNames;
+      }
+    } catch (error) {
+      console.error('Failed to fetch workspaces from API:', error);
+    }
+
+    return [];
   }
 
   /**
@@ -230,6 +275,25 @@ export class V2WorkspaceService {
     }
 
     this.setWorkspaceFiles(repoUrl, workspaceName, files);
+  }
+
+  /**
+   * Check if a file is in any workspace and return the workspace name
+   * @param repoUrl Repo URL in format "domain/owner/repo"
+   * @param filePath File path to check
+   * @returns Workspace name if found, null otherwise
+   */
+  static getFileWorkspace(repoUrl: string, filePath: string): string | null {
+    const allFiles = this.getAllFiles(repoUrl);
+
+    // Search through all workspaces
+    for (const [workspaceName, files] of Object.entries(allFiles)) {
+      if (files.some(f => f.filePath === filePath)) {
+        return workspaceName;
+      }
+    }
+
+    return null;
   }
 
   /**

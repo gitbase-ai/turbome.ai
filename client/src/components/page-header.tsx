@@ -25,6 +25,7 @@ import { V2WorkspaceService } from "@/services/V2WorkspaceService"
 import { V2ContentService } from "@/services/V2ContentService"
 import { V2Search, V2Workspace } from "@shared/index"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 interface PageHeaderProps {
   breadcrumbs?: { label: string; href?: string }[]
@@ -36,7 +37,9 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<V2Search.V2SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [workspaces, setWorkspaces] = useState<V2Workspace.V2WorkspaceGroup[]>([])
+  const [workspaces, setWorkspaces] = useState<string[]>([]) // Store workspace names only
+  const [repoUrl, setRepoUrl] = useState<string>("")
+  const [fileWorkspaceMap, setFileWorkspaceMap] = useState<Record<string, string | null>>({}) // filePath -> workspace name
   const searchContainerRef = useRef<HTMLDivElement>(null)
 
   // Handle click outside to close search
@@ -56,25 +59,22 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
     }
   }, [open])
 
-  // Fetch workspaces on mount
+  // Load workspaces from V2WorkspaceService (with cache and API fallback)
   useEffect(() => {
-    const fetchWorkspaces = async () => {
+    const loadWorkspaces = async () => {
       try {
         const currentRepo = await V2RepoService.getCurrentRepo()
-        const urlParts = currentRepo.url.split('/')
+        const url = currentRepo.url
+        setRepoUrl(url)
 
-        if (urlParts.length === 3) {
-          const [domain, owner, repo] = urlParts
-          const response = await V2WorkspaceService.getWorkspacesByRepoUrl(domain, owner, repo, { limit: 100 })
-          if (response.success) {
-            setWorkspaces(response.data.workspaces)
-          }
-        }
+        // Get workspace names (will use cache or fetch from API if needed)
+        const workspaceNames = await V2WorkspaceService.getWorkspaceNames(url)
+        setWorkspaces(workspaceNames)
       } catch (error) {
-        console.error('Failed to fetch workspaces:', error)
+        console.error('Failed to load workspaces:', error)
       }
     }
-    fetchWorkspaces()
+    loadWorkspaces()
   }, [])
 
   // Debounced search effect
@@ -117,6 +117,21 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
     return () => clearTimeout(delayTimer)
   }, [searchQuery, open])
 
+  // Check which workspace each search result file belongs to
+  useEffect(() => {
+    if (!repoUrl || searchResults.length === 0) {
+      setFileWorkspaceMap({})
+      return
+    }
+
+    const map: Record<string, string | null> = {}
+    searchResults.forEach(result => {
+      const workspace = V2WorkspaceService.getFileWorkspace(repoUrl, result.path)
+      map[result.path] = workspace
+    })
+    setFileWorkspaceMap(map)
+  }, [searchResults, repoUrl])
+
   const handleAddToWorkspace = async (filePath: string, workspaceName: string) => {
     try {
       const currentRepo = await V2RepoService.getCurrentRepo()
@@ -129,6 +144,31 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
           frontmatterUpdates: { workspace: workspaceName },
           commitMessage: `Add ${filePath} to workspace ${workspaceName}`
         })
+
+        // Update localStorage to add this file to the workspace
+        const currentRepoUrl = currentRepo.url
+        const existingFiles = V2WorkspaceService.getWorkspaceFiles(currentRepoUrl, workspaceName)
+
+        // Check if file already exists
+        if (!existingFiles.some(f => f.filePath === filePath)) {
+          existingFiles.push({
+            filePath,
+            open: false,
+            draft: undefined
+          })
+          V2WorkspaceService.setWorkspaceFiles(currentRepoUrl, workspaceName, existingFiles)
+        }
+
+        // Dispatch custom event to notify workspace page
+        window.dispatchEvent(new CustomEvent('workspace-file-added', {
+          detail: { workspaceName, filePath, repoUrl: currentRepoUrl }
+        }))
+
+        // Update local state to show the badge immediately
+        setFileWorkspaceMap(prev => ({
+          ...prev,
+          [filePath]: workspaceName
+        }))
 
         // Show success feedback (you can add a toast notification here if needed)
         console.log(`Successfully added ${filePath} to workspace ${workspaceName}`)
@@ -236,24 +276,32 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
                                     </span>
                                   </div>
                                 </CommandItem>
-                                {/* Workspace buttons - only visible on hover */}
-                                <div className="absolute bottom-2 right-2 hidden group-hover:flex gap-1 flex-wrap max-w-[50%]">
-                                  {workspaces.map(ws => (
-                                    <Button
-                                      key={ws.workspace}
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-6 text-xs bg-background"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleAddToWorkspace(result.path, ws.workspace)
-                                      }}
-                                    >
-                                      <Plus className="h-3 w-3 mr-1" />
-                                      {ws.workspace}
-                                    </Button>
-                                  ))}
-                                </div>
+                                {/* Show workspace badge if file is in a workspace, otherwise show add buttons on hover */}
+                                {fileWorkspaceMap[result.path] ? (
+                                  <div className="absolute bottom-2 right-2">
+                                    <Badge variant="secondary" className="text-xs">
+                                      {fileWorkspaceMap[result.path]}
+                                    </Badge>
+                                  </div>
+                                ) : (
+                                  <div className="absolute bottom-2 right-2 hidden group-hover:flex gap-1 flex-wrap max-w-[50%]">
+                                    {workspaces.map(wsName => (
+                                      <Button
+                                        key={wsName}
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-6 text-xs bg-background"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleAddToWorkspace(result.path, wsName)
+                                        }}
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        {wsName}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             ))}
                         </CommandGroup>
@@ -287,24 +335,32 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
                                     </span>
                                   </div>
                                 </CommandItem>
-                                {/* Workspace buttons - only visible on hover */}
-                                <div className="absolute bottom-2 right-2 hidden group-hover:flex gap-1 flex-wrap max-w-[50%]">
-                                  {workspaces.map(ws => (
-                                    <Button
-                                      key={ws.workspace}
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-6 text-xs bg-background"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleAddToWorkspace(result.path, ws.workspace)
-                                      }}
-                                    >
-                                      <Plus className="h-3 w-3 mr-1" />
-                                      {ws.workspace}
-                                    </Button>
-                                  ))}
-                                </div>
+                                {/* Show workspace badge if file is in a workspace, otherwise show add buttons on hover */}
+                                {fileWorkspaceMap[result.path] ? (
+                                  <div className="absolute bottom-2 right-2">
+                                    <Badge variant="secondary" className="text-xs">
+                                      {fileWorkspaceMap[result.path]}
+                                    </Badge>
+                                  </div>
+                                ) : (
+                                  <div className="absolute bottom-2 right-2 hidden group-hover:flex gap-1 flex-wrap max-w-[50%]">
+                                    {workspaces.map(wsName => (
+                                      <Button
+                                        key={wsName}
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-6 text-xs bg-background"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleAddToWorkspace(result.path, wsName)
+                                        }}
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        {wsName}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             ))}
                         </CommandGroup>

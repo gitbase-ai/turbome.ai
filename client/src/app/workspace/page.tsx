@@ -86,6 +86,22 @@ export default function Page() {
     }
 
     fetchWorkspaces()
+
+    // Listen for workspace file added event from page-header
+    const handleWorkspaceFileAdded = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const { workspaceName, filePath } = customEvent.detail
+      console.log(`File ${filePath} added to workspace ${workspaceName}, refreshing...`)
+
+      // Refetch workspaces to get updated data
+      fetchWorkspaces()
+    }
+
+    window.addEventListener('workspace-file-added', handleWorkspaceFileAdded)
+
+    return () => {
+      window.removeEventListener('workspace-file-added', handleWorkspaceFileAdded)
+    }
   }, [])
 
   const handleSelectionChange = (selectedIds: string[]) => {
@@ -99,21 +115,23 @@ export default function Page() {
         {isLoading ? (
           <WorkspaceSkeleton />
         ) : error ? (
-          <div className="flex items-center justify-center p-8">
+          <div className="flex items-center justify-center p-8 animate-in fade-in duration-300">
             <div className="text-destructive">Error: {error}</div>
           </div>
         ) : workspaces.length === 0 ? (
-          <div className="flex items-center justify-center p-8">
+          <div className="flex items-center justify-center p-8 animate-in fade-in duration-300">
             <div className="text-muted-foreground">No workspaces found</div>
           </div>
         ) : (
-          <MultiSelectTabs
-            repoUrl={repoUrl}
-            workspaces={workspaces}
-            defaultSelected={workspaces[0] ? [workspaces[0].workspace] : []}
-            maxSelected={4}
-            onSelectionChange={handleSelectionChange}
-          />
+          <div className="animate-in fade-in duration-500">
+            <MultiSelectTabs
+              repoUrl={repoUrl}
+              workspaces={workspaces}
+              defaultSelected={workspaces[0] ? [workspaces[0].workspace] : []}
+              maxSelected={4}
+              onSelectionChange={handleSelectionChange}
+            />
+          </div>
         )}
       </div>
     </>

@@ -43,11 +43,6 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* Milkdown editor padding adjustment */
-.milkdown .ProseMirror {
-  padding: 0px 30px 0px 80px !important;
-}
-
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);

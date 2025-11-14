@@ -4,6 +4,7 @@ import * as React from "react"
 import * as AccordionPrimitive from "@radix-ui/react-accordion"
 import { ChevronRight, Archive, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import MilkdownEditor, { MilkdownEditorRef } from "@/components/MilkdownEditor"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +16,22 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command"
 import { Button } from "@/components/ui/button"
 
 function FileAccordion({
@@ -41,12 +58,113 @@ function FileAccordionTrigger({
   children,
   onArchive,
   isArchiving,
+  onRename,
+  filePath,
   ...props
 }: React.ComponentProps<typeof AccordionPrimitive.Trigger> & {
   onArchive?: () => void
   isArchiving?: boolean
+  onRename?: (oldPath: string, newPath: string) => void
+  filePath?: string
 }) {
   const [archivePopoverOpen, setArchivePopoverOpen] = React.useState(false)
+  const [renameDialogOpen, setRenameDialogOpen] = React.useState(false)
+  const [newPath, setNewPath] = React.useState("")
+  const [pathSuggestions, setPathSuggestions] = React.useState<string[]>([])
+
+  // Initialize newPath when dialog opens
+  React.useEffect(() => {
+    if (renameDialogOpen && filePath) {
+      setNewPath(filePath)
+
+      // Load initial suggestions for the current directory
+      const lastSlashIndex = filePath.lastIndexOf('/')
+      if (lastSlashIndex >= 0) {
+        const dirPath = filePath.substring(0, lastSlashIndex)
+        loadPathSuggestions(dirPath)
+      } else {
+        // Load root directory suggestions
+        loadPathSuggestions('')
+      }
+    }
+  }, [renameDialogOpen, filePath])
+
+  // Handle path input change and load suggestions
+  const handlePathChange = (value: string) => {
+    setNewPath(value)
+
+    // Extract directory part for suggestions
+    const lastSlashIndex = value.lastIndexOf('/')
+    if (lastSlashIndex >= 0) {
+      const dirPath = value.substring(0, lastSlashIndex)
+      loadPathSuggestions(dirPath)
+    } else {
+      // Load root directory suggestions if no slash
+      loadPathSuggestions('')
+    }
+  }
+
+  // Handle directory selection from suggestions
+  const handleSelectDirectory = (dirPath: string) => {
+    // Get the current filename
+    const lastSlashIndex = (filePath || '').lastIndexOf('/')
+    const filename = lastSlashIndex >= 0
+      ? (filePath || '').substring(lastSlashIndex + 1)
+      : (filePath || '')
+
+    // Combine selected directory with filename
+    const newFullPath = dirPath ? `${dirPath}/${filename}` : filename
+    setNewPath(newFullPath)
+
+    // Load suggestions for the selected directory
+    loadPathSuggestions(dirPath)
+  }
+
+  // Load path suggestions from tree API
+  const loadPathSuggestions = async (dirPath: string) => {
+    try {
+      // We need to get repo info to call the tree API
+      const { V2RepoService } = await import("@/services/V2RepoService")
+      const { V2TreeService } = await import("@/services/V2TreeService")
+
+      const currentRepo = await V2RepoService.getCurrentRepo()
+      const urlParts = currentRepo.url.split('/')
+
+      if (urlParts.length === 3) {
+        const [domain, owner, repo] = urlParts
+
+        // Fetch directory tree
+        const response = await V2TreeService.getTree(domain, owner, repo, dirPath, false)
+
+        if (response.success && response.data) {
+          // Extract directory entries and create path suggestions
+          const suggestions = response.data.entries
+            .filter(entry => entry.type === 'directory')
+            .map(entry => entry.path)
+
+          // Add root directory option if we're not already at root
+          if (dirPath !== '') {
+            suggestions.unshift('')
+          }
+
+          setPathSuggestions(suggestions)
+        } else {
+          setPathSuggestions([])
+        }
+      }
+    } catch (error) {
+      console.error('Error loading path suggestions:', error)
+      setPathSuggestions([])
+    }
+  }
+
+  const handleRename = () => {
+    if (filePath && newPath && filePath !== newPath) {
+      onRename?.(filePath, newPath)
+      setRenameDialogOpen(false)
+      setNewPath("")
+    }
+  }
 
   return (
     <AccordionPrimitive.Header className="flex">
@@ -139,7 +257,14 @@ function FileAccordionTrigger({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Rename</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setRenameDialogOpen(true)
+                }}
+              >
+                Rename
+              </DropdownMenuItem>
               <DropdownMenuItem>Duplicate</DropdownMenuItem>
               <DropdownMenuItem>Move to...</DropdownMenuItem>
               <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
@@ -147,22 +272,197 @@ function FileAccordionTrigger({
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Rename File</DialogTitle>
+            <DialogDescription>
+              Enter the new path for this file. You can change the filename or move it to a different directory.
+            </DialogDescription>
+          </DialogHeader>
+          <Command className="rounded-lg border">
+            <CommandInput
+              placeholder="Enter new path..."
+              value={newPath}
+              onValueChange={handlePathChange}
+            />
+            <CommandList>
+              {pathSuggestions.length === 0 ? (
+                <CommandEmpty>No directories found. Type the new path directly.</CommandEmpty>
+              ) : (
+                <CommandGroup heading="Available Directories">
+                  {pathSuggestions.map((suggestion) => (
+                    <CommandItem
+                      key={suggestion}
+                      value={suggestion}
+                      onSelect={() => handleSelectDirectory(suggestion)}
+                    >
+                      <span className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                        {suggestion || '/ (root)'}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRenameDialogOpen(false)
+                setNewPath("")
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRename}
+              disabled={!newPath || newPath === filePath}
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AccordionPrimitive.Header>
   )
+}
+
+// Enhanced text editor using MilkdownEditor
+const EnhancedTextEditor = ({
+  content,
+  fileType,
+  className,
+  editorRef,
+  onEdit
+}: {
+  content: string
+  fileType?: string
+  className?: string
+  editorRef?: (ref: MilkdownEditorRef | null) => void
+  onEdit?: () => void
+}) => {
+  return (
+    <div onClick={onEdit}>
+      <MilkdownEditor
+        ref={editorRef}
+        content={content}
+        fileType={fileType}
+        readOnly={false}
+        className={className}
+      />
+    </div>
+  )
+}
+
+interface FileAccordionContentProps extends React.ComponentProps<typeof AccordionPrimitive.Content> {
+  filePath?: string
+  repoUrl?: string
 }
 
 function FileAccordionContent({
   className,
   children,
+  filePath,
+  repoUrl,
   ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Content>) {
+}: FileAccordionContentProps) {
+  const [content, setContent] = React.useState<string | null>(null)
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [fileType, setFileType] = React.useState<string>('text')
+  const editorRef = React.useRef<MilkdownEditorRef | null>(null)
+
+  React.useEffect(() => {
+    const loadContent = async () => {
+      if (!filePath || !repoUrl) return
+
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const { V2ContentService } = await import("@/services/V2ContentService")
+        const { V2RepoService } = await import("@/services/V2RepoService")
+
+        const currentRepo = await V2RepoService.getCurrentRepo()
+        const urlParts = currentRepo.url.split('/')
+
+        if (urlParts.length === 3) {
+          const [domain, owner, repo] = urlParts
+
+          const response = await V2ContentService.getFileContent(domain, owner, repo, filePath)
+
+          if (response.success && response.data) {
+            setContent(response.data.content)
+
+            // Extract file extension for fileType
+            const extension = filePath.split('.').pop() || 'text'
+            setFileType(extension)
+          } else {
+            setError(response.message || 'Failed to load content')
+          }
+        }
+      } catch (err) {
+        console.error('Error loading file content:', err)
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadContent()
+  }, [filePath, repoUrl])
+
+  const setEditorRefCallback = React.useCallback((ref: MilkdownEditorRef | null) => {
+    editorRef.current = ref
+  }, [])
+
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden text-sm"
+      className="data-[state=closed]:animate-accordion-up data-[state=closed]:overflow-hidden data-[state=open]:animate-accordion-down data-[state=open]:overflow-visible text-sm"
       {...props}
     >
-      <div className={cn("pt-0 pb-4 pl-10", className)}>{children}</div>
+      <div className={cn("pt-0 pb-4", className)}>
+        {filePath && repoUrl ? (
+          <div>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <svg className="animate-spin h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 818-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+            ) : error ? (
+              <div className="text-red-600 py-4">
+                Error: {error}
+              </div>
+            ) : content !== null ? (
+              <div className="mt-2">
+                <EnhancedTextEditor
+                  content={content}
+                  fileType={fileType}
+                  className="mt-2"
+                  editorRef={setEditorRefCallback}
+                />
+              </div>
+            ) : null}
+            <div className="pl-10">
+              {children}
+            </div>
+          </div>
+        ) : (
+          <div className="pl-10">
+            {children}
+          </div>
+        )}
+      </div>
     </AccordionPrimitive.Content>
   )
 }

@@ -73,7 +73,25 @@ export default function Page() {
         )
 
         if (response.success && response.data.workspaces) {
-          setWorkspaces(response.data.workspaces)
+          const apiWorkspaces = response.data.workspaces
+
+          // Get all workspaces from localStorage (including empty ones)
+          const localWorkspaces = V2WorkspaceService.getWorkspaces(currentRepo.url)
+
+          // Find empty workspaces (those in localStorage but not in API response)
+          const emptyWorkspaceNames = Object.keys(localWorkspaces).filter(name =>
+            !apiWorkspaces.some(ws => ws.workspace === name)
+          )
+
+          // Create workspace objects for empty workspaces
+          const emptyWorkspaces: V2Workspace.V2WorkspaceGroup[] = emptyWorkspaceNames.map(name => ({
+            workspace: name,
+            files: [],
+            count: 0
+          }))
+
+          // Merge API workspaces with empty workspaces
+          setWorkspaces([...apiWorkspaces, ...emptyWorkspaces])
         } else {
           setError(response.message || 'Failed to fetch workspaces')
         }

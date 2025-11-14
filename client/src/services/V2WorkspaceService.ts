@@ -297,6 +297,30 @@ export class V2WorkspaceService {
   }
 
   /**
+   * Add a new empty workspace to localStorage
+   * @param repoUrl Repo URL in format "domain/owner/repo"
+   * @param workspaceName Name of the workspace to create
+   * @returns true if created successfully, false if already exists
+   */
+  static addWorkspace(repoUrl: string, workspaceName: string): boolean {
+    const workspaces = this.getWorkspaces(repoUrl);
+
+    // Check if workspace already exists
+    if (workspaceName in workspaces) {
+      return false;
+    }
+
+    // Add new workspace (mark as unselected by default)
+    workspaces[workspaceName] = false;
+    this.setWorkspaces(repoUrl, workspaces);
+
+    // Initialize empty file list for this workspace
+    this.setWorkspaceFiles(repoUrl, workspaceName, []);
+
+    return true;
+  }
+
+  /**
    * Clear workspace UI state from localStorage for a specific repo
    * @param repoUrl Repo URL in format "domain/owner/repo"
    */

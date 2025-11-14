@@ -1,4 +1,4 @@
-import { Controller, Put, Delete, Body, Param, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Put, Delete, Body, Param, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { V2ContentService } from './content.service';
 import { V2Content } from '@shared/index';
@@ -7,6 +7,67 @@ import { V2Content } from '@shared/index';
 @Controller('v2/repos')
 export class V2ContentController {
   constructor(private readonly contentService: V2ContentService) {}
+
+  @Get(':domain/:owner/:repo/contents/:path(*)')
+  @ApiOperation({
+    summary: 'Get file content (V2)',
+    description: 'Read file content from repository. For markdown files, parses and returns frontmatter separately from content. V2 API uses repo URL in path.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'File content retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'File path relative to repository root' },
+            content: { type: 'string', description: 'File content (without frontmatter for markdown files)' },
+            size: { type: 'number', description: 'File size in bytes' },
+            encoding: { type: 'string', description: 'File encoding (utf8)' },
+            frontmatter: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'Parsed frontmatter (only for markdown files)'
+            }
+          }
+        },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid file path' })
+  @ApiResponse({ status: 404, description: 'Repository or file not found' })
+  async getFileContent(
+    @Param('domain') domain: string,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+    @Param('path') filePath: string,
+  ): Promise<V2Content.V2GetContentResponse> {
+    try {
+      const repoUrl = `${domain}/${owner}/${repo}`;
+      const result = await this.contentService.getFileContent(repoUrl, filePath);
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while reading file content';
+
+      if (errorMessage.includes('does not exist') || errorMessage.includes('not found')) {
+        throw new NotFoundException(errorMessage);
+      }
+
+      if (errorMessage.includes('Invalid') || errorMessage.includes('not a file')) {
+        throw new BadRequestException(errorMessage);
+      }
+
+      throw new InternalServerErrorException('Failed to read file content');
+    }
+  }
 
   @Put(':domain/:owner/:repo/frontmatters/:path(*)')
   @ApiOperation({

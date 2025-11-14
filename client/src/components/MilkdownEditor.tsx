@@ -4,6 +4,7 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Crepe } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
+import './MilkdownEditor.css'
 
 interface MilkdownEditorProps {
   content: string

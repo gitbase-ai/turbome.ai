@@ -277,4 +277,61 @@ export class V2ContentService {
       throw new Error(`Failed to delete frontmatter: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Get file content
+   * @param repoUrl - Repository URL
+   * @param filePath - File path relative to repository root
+   * @returns File content with optional frontmatter
+   */
+  async getFileContent(
+    repoUrl: string,
+    filePath: string
+  ): Promise<V2Content.V2GetContentResult> {
+    // Security check: prevent directory traversal
+    if (!this.isSafePath(filePath)) {
+      throw new Error('Invalid file path: contains invalid characters or attempts directory traversal');
+    }
+
+    // Get repository local path
+    const repoLocalPath = await this.getRepoLocalPath(repoUrl);
+    const fullPath = path.join(repoLocalPath, filePath);
+
+    try {
+      // Check if file exists
+      let fileStats;
+      try {
+        fileStats = await fs.stat(fullPath);
+      } catch (error) {
+        throw new Error(`File '${filePath}' does not exist`);
+      }
+
+      if (!fileStats.isFile()) {
+        throw new Error(`Path '${filePath}' is not a file`);
+      }
+
+      // Read file content
+      const content = await fs.readFile(fullPath, 'utf8');
+
+      // Parse frontmatter if it's a markdown file
+      let frontmatter: Record<string, any> | undefined;
+      let actualContent = content;
+
+      if (this.isMarkdownFile(filePath)) {
+        const parsed = this.parseFrontmatter(content);
+        frontmatter = parsed.frontmatter;
+        actualContent = parsed.content;
+      }
+
+      return {
+        path: filePath,
+        content: actualContent,
+        size: fileStats.size,
+        encoding: 'utf8',
+        frontmatter,
+      };
+    } catch (error) {
+      throw new Error(`Failed to read file content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }

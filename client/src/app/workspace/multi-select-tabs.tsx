@@ -9,10 +9,22 @@ import {
   FileAccordionTrigger,
 } from "./file-accordion"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Plus, Trash2 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { V2Workspace } from "@shared/index"
 import { V2ContentService } from "@/services/V2ContentService"
 import { V2RepoService } from "@/services/V2RepoService"
 import { V2WorkspaceService } from "@/services/V2WorkspaceService"
+import { V2TreeService } from "@/services/V2TreeService"
 
 interface Tab {
   id: string
@@ -80,6 +92,9 @@ export function MultiSelectTabs({
 
   const [archivingFiles, setArchivingFiles] = useState<Set<string>>(new Set())
   const [removingFiles, setRemovingFiles] = useState<Set<string>>(new Set())
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [newWorkspaceName, setNewWorkspaceName] = useState("")
+  const [addError, setAddError] = useState<string | null>(null)
 
   // Save workspace selection state whenever it changes
   useEffect(() => {
@@ -205,34 +220,188 @@ export function MultiSelectTabs({
     }
   }
 
+  const handleAddWorkspace = () => {
+    setAddError(null)
+
+    // Validate workspace name
+    if (!newWorkspaceName.trim()) {
+      setAddError("Workspace name cannot be empty")
+      return
+    }
+
+    // Check if workspace already exists
+    if (tabs.some(tab => tab.id === newWorkspaceName.trim())) {
+      setAddError("Workspace already exists")
+      return
+    }
+
+    // Add workspace to localStorage
+    const success = V2WorkspaceService.addWorkspace(repoUrl, newWorkspaceName.trim())
+
+    if (success) {
+      const newWorkspaceId = newWorkspaceName.trim()
+
+      // Add to tabs state
+      setTabs(prevTabs => [
+        ...prevTabs,
+        {
+          id: newWorkspaceId,
+          label: newWorkspaceId,
+          files: [],
+          count: 0
+        }
+      ])
+
+      // Automatically select the new workspace
+      setSelectedTabs(prev => {
+        // If we're at max capacity, remove the last selected tab
+        if (prev.length >= maxSelected) {
+          const newSelection = [...prev.slice(0, -1), newWorkspaceId]
+          if (onSelectionChange) {
+            onSelectionChange(newSelection)
+          }
+          return newSelection
+        }
+        // Otherwise, just add it
+        const newSelection = [...prev, newWorkspaceId]
+        if (onSelectionChange) {
+          onSelectionChange(newSelection)
+        }
+        return newSelection
+      })
+
+      // Close dialog and reset form
+      setIsAddDialogOpen(false)
+      setNewWorkspaceName("")
+      setAddError(null)
+
+      console.log(`Workspace "${newWorkspaceId}" created successfully and selected`)
+    } else {
+      setAddError("Failed to create workspace")
+    }
+  }
+
+  const handleDeleteWorkspace = (workspaceId: string) => {
+    // Remove from tabs state
+    setTabs(prevTabs => prevTabs.filter(tab => tab.id !== workspaceId))
+
+    // Remove from selected tabs if it was selected
+    setSelectedTabs(prev => {
+      const newSelection = prev.filter(id => id !== workspaceId)
+      // If this was the only selected tab, select the first remaining tab
+      if (newSelection.length === 0 && tabs.length > 1) {
+        const firstRemainingTab = tabs.find(tab => tab.id !== workspaceId)
+        if (firstRemainingTab) {
+          if (onSelectionChange) {
+            onSelectionChange([firstRemainingTab.id])
+          }
+          return [firstRemainingTab.id]
+        }
+      }
+      if (onSelectionChange) {
+        onSelectionChange(newSelection)
+      }
+      return newSelection
+    })
+
+    // Remove from localStorage
+    const state = V2WorkspaceService.loadUIState(repoUrl)
+    if (state) {
+      delete state.workspaces[workspaceId]
+      delete state.files[workspaceId]
+      V2WorkspaceService.saveUIState(repoUrl, state)
+    }
+
+    console.log(`Workspace "${workspaceId}" deleted successfully`)
+  }
+
+  const handleRename = async (oldPath: string, newPath: string) => {
+    try {
+      // Get current repo
+      const currentRepo = await V2RepoService.getCurrentRepo()
+
+      // Parse repo URL (format: domain/owner/repo)
+      const urlParts = currentRepo.url.split('/')
+      if (urlParts.length !== 3) {
+        throw new Error('Invalid repo URL format')
+      }
+
+      const [domain, owner, repo] = urlParts
+
+      // Call V2 Tree API to rename file
+      const response = await V2TreeService.renameFile(domain, owner, repo, {
+        oldPath,
+        newPath,
+        commitMessage: `Rename ${oldPath} to ${newPath}`,
+      })
+
+      if (response.success) {
+        console.log(`File renamed successfully from ${oldPath} to ${newPath}`)
+
+        // Update tabs state to reflect the new path
+        setTabs(prevTabs => {
+          return prevTabs.map(tab => ({
+            ...tab,
+            files: tab.files?.map(file =>
+              file.path === oldPath
+                ? { ...file, path: newPath, filename: newPath.split('/').pop() || newPath }
+                : file
+            ),
+          }))
+        })
+
+        // Update open accordions if the renamed file was open
+        setOpenAccordions(prev => prev.map(path => path === oldPath ? newPath : path))
+
+        alert(`Successfully renamed to ${newPath}`)
+      } else {
+        throw new Error(response.message || 'Failed to rename file')
+      }
+    } catch (error) {
+      console.error('Error renaming file:', error)
+      alert(`Failed to rename file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* Multi-select Tabs */}
-      <div className="flex items-center gap-1 rounded-lg bg-muted text-muted-foreground p-[3px]">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => toggleTab(tab.id)}
-            className={cn(
-              "inline-flex items-center gap-2 justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "disabled:pointer-events-none disabled:opacity-50",
-              selectedTabs.includes(tab.id)
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50"
-            )}
-          >
-            <span>{tab.label}</span>
-            {tab.count !== undefined && (
-              <Badge
-                variant="secondary"
-                className="ml-1 h-5 px-1.5 text-xs"
-              >
-                {tab.count}
-              </Badge>
-            )}
-          </button>
-        ))}
+      {/* Multi-select Tabs with Add Workspace Button */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-1 rounded-lg bg-muted text-muted-foreground p-[3px]">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => toggleTab(tab.id)}
+              className={cn(
+                "inline-flex items-center gap-2 justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "disabled:pointer-events-none disabled:opacity-50",
+                selectedTabs.includes(tab.id)
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/50"
+              )}
+            >
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <Badge
+                  variant="secondary"
+                  className="ml-1 h-5 px-1.5 text-xs"
+                >
+                  {tab.count}
+                </Badge>
+              )}
+            </button>
+          ))}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsAddDialogOpen(true)}
+          className="shrink-0"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Workspace
+        </Button>
       </div>
 
       {/* Content based on selected tabs */}
@@ -244,19 +413,32 @@ export function MultiSelectTabs({
       >
         {selectedTabs.map((tabId) => {
           const tab = tabs.find((t) => t.id === tabId)
+          const isEmpty = !tab?.files || tab.files.length === 0
           return (
             <div
               key={tabId}
               className="rounded-xl border bg-card p-6 text-card-foreground shadow"
             >
-              <h3 className="text-lg font-semibold mb-4">
-                {tab?.label}
-                {tab?.count !== undefined && (
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    ({tab.count} files)
-                  </span>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">
+                  {tab?.label}
+                  {tab?.count !== undefined && (
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      ({tab.count} files)
+                    </span>
+                  )}
+                </h3>
+                {isEmpty && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDeleteWorkspace(tabId)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 )}
-              </h3>
+              </div>
               <FileAccordion
                 type="multiple"
                 className="w-full"
@@ -276,11 +458,16 @@ export function MultiSelectTabs({
                         <FileAccordionTrigger
                           onArchive={() => handleArchive(file.path)}
                           isArchiving={archivingFiles.has(file.path)}
+                          onRename={handleRename}
+                          filePath={file.path}
                         >
                           {file.filename}
                         </FileAccordionTrigger>
-                        <FileAccordionContent>
-                          <div className="text-sm text-muted-foreground space-y-1">
+                        <FileAccordionContent
+                          filePath={file.path}
+                          repoUrl={repoUrl}
+                        >
+                          <div className="text-sm text-muted-foreground space-y-1 mt-4">
                             <div>Path: {file.path}</div>
                             <div>Workspace: {file.workspace}</div>
                             <div>Line: {file.line}</div>
@@ -299,6 +486,45 @@ export function MultiSelectTabs({
           )
         })}
       </div>
+
+      {/* Add Workspace Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Workspace</DialogTitle>
+            <DialogDescription>
+              Create a new empty workspace. You can add files to it later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Input
+                id="workspace-name"
+                placeholder="Enter workspace name..."
+                value={newWorkspaceName}
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                autoFocus
+              />
+              {addError && (
+                <p className="text-sm text-destructive">{addError}</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddDialogOpen(false)
+                setNewWorkspaceName("")
+                setAddError(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddWorkspace}>Create Workspace</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -397,4 +397,16 @@ export class GitUtil {
       return null;
     }
   }
+
+  /**
+   * Rename/move file or directory in git
+   */
+  async moveFile(oldPath: string, newPath: string): Promise<void> {
+    try {
+      // Use git mv command to rename/move the file or directory
+      await this.executeGitCommand(`git mv "${oldPath}" "${newPath}"`);
+    } catch (error) {
+      throw new Error(`Failed to rename/move ${oldPath} to ${newPath}: ${error.message}`);
+    }
+  }
 }

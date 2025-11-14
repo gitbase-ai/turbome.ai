@@ -1,0 +1,12 @@
+/* Milkdown Editor Custom Styles */
+
+/* Milkdown editor padding adjustment */
+.milkdown .ProseMirror {
+  padding: 0px 15px 0px 45px !important;
+}
+
+/* Milkdown block handle operation item adjustment */
+.milkdown .milkdown-block-handle .operation-item {
+  width: 24px;
+  padding: 4px 0px 4px 0px;
+}

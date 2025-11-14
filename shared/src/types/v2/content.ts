@@ -46,3 +46,18 @@ export interface V2DeleteFrontmatterResponse {
   data: V2DeleteFrontmatterResult;
   message?: string;
 }
+
+// Get File Content Types
+export interface V2GetContentResult {
+  path: string;
+  content: string;
+  size: number;
+  encoding?: string;
+  frontmatter?: Record<string, any>;
+}
+
+export interface V2GetContentResponse {
+  success: boolean;
+  data?: V2GetContentResult;
+  message?: string;
+}

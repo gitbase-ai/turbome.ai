@@ -34,7 +34,7 @@ export function NavMain({
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Explore</SidebarGroupLabel>
+      <SidebarGroupLabel>Turbo Me</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
           // If item has sub-items, render as collapsible

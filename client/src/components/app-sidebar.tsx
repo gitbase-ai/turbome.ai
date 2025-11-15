@@ -10,12 +10,12 @@ import {
 
 import { NavMain } from "@/components/nav-main"
 // import { NavAnalytics } from "@/components/nav-analytics"
-import { NavUser } from "@/components/nav-user"
+// import { NavUser } from "@/components/nav-user"
 import { RepositorySwitcher } from "@/components/repository-switcher"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
+  // SidebarFooter,
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"

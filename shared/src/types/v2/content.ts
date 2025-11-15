@@ -2,12 +2,17 @@
  * V2 Content Types
  */
 
+// Git Commit Message
+export interface GitCommitMessage {
+  authorName: string;
+  authorEmail: string;
+  message: string;
+}
+
 // Update Frontmatter Types
 export interface V2UpdateFrontmatterRequest {
   frontmatterUpdates: Record<string, any>;
-  commitMessage: string;
-  authorName?: string;
-  authorEmail?: string;
+  commitMessage: GitCommitMessage;
 }
 
 export interface V2UpdateFrontmatterResult {
@@ -26,11 +31,8 @@ export interface V2UpdateFrontmatterResponse {
 
 // Delete Frontmatter Types
 export interface V2DeleteFrontmatterRequest {
-  path: string;
   frontmatterKeys: string[];
-  commitMessage: string;
-  authorName?: string;
-  authorEmail?: string;
+  commitMessage: GitCommitMessage;
 }
 
 export interface V2DeleteFrontmatterResult {
@@ -59,5 +61,25 @@ export interface V2GetContentResult {
 export interface V2GetContentResponse {
   success: boolean;
   data?: V2GetContentResult;
+  message?: string;
+}
+
+// Create/Update File Content Types
+export interface V2CreateOrUpdateFileRequest {
+  content: string;
+  frontmatter?: Record<string, any>;
+  commitMessage: GitCommitMessage;
+}
+
+export interface V2CreateOrUpdateFileResult {
+  path: string;
+  size: number;
+  created: boolean; // true if created, false if updated
+  lastModified: string;
+}
+
+export interface V2CreateOrUpdateFileResponse {
+  success: boolean;
+  data?: V2CreateOrUpdateFileResult;
   message?: string;
 }

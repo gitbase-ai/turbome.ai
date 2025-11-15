@@ -40,9 +40,7 @@ export class V2ContentService {
     filePath: string,
     request: {
       frontmatterUpdates: Record<string, unknown>;
-      commitMessage: string;
-      authorName?: string;
-      authorEmail?: string;
+      commitMessage: V2Content.GitCommitMessage;
     }
   ): Promise<V2Content.V2UpdateFrontmatterResponse> {
     const url = `${this.BASE_URL}/repos/${domain}/${owner}/${repo}/frontmatters/${filePath}`;
@@ -72,9 +70,7 @@ export class V2ContentService {
     filePath: string,
     request: {
       frontmatterKeys: string[];
-      commitMessage: string;
-      authorName?: string;
-      authorEmail?: string;
+      commitMessage: V2Content.GitCommitMessage;
     }
   ): Promise<V2Content.V2DeleteFrontmatterResponse> {
     const url = `${this.BASE_URL}/repos/${domain}/${owner}/${repo}/frontmatters/${filePath}`;
@@ -89,6 +85,43 @@ export class V2ContentService {
 
     if (!response.ok) {
       throw new Error('Failed to delete frontmatter');
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Create or update file content
+   * @param domain - Git hosting domain (e.g., github.com)
+   * @param owner - Repository owner
+   * @param repo - Repository name
+   * @param path - File path within repository
+   * @param request - Create/update request data
+   * @returns Create/update response
+   */
+  static async createOrUpdateFile(
+    domain: string,
+    owner: string,
+    repo: string,
+    path: string,
+    request: {
+      content: string;
+      frontmatter?: Record<string, unknown>;
+      commitMessage: V2Content.GitCommitMessage;
+    }
+  ): Promise<V2Content.V2CreateOrUpdateFileResponse> {
+    const url = `${this.BASE_URL}/repos/${domain}/${owner}/${repo}/contents/${path}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to create/update file');
     }
 
     return await response.json();

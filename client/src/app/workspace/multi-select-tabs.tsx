@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 import {
   FileAccordion,
@@ -21,17 +21,9 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { V2Workspace } from "@shared/index"
-import { V2ContentService } from "@/services/V2ContentService"
 import { V2RepoService } from "@/services/V2RepoService"
-import { V2WorkspaceService } from "@/services/V2WorkspaceService"
 import { V2TreeService } from "@/services/V2TreeService"
-
-interface Tab {
-  id: string
-  label: string
-  files?: V2Workspace.V2WorkspaceFile[]
-  count?: number
-}
+import { useWorkspaceStore } from "@/stores/workspaceStore"
 
 interface MultiSelectTabsProps {
   repoUrl: string
@@ -48,111 +40,78 @@ export function MultiSelectTabs({
   maxSelected = 4,
   onSelectionChange,
 }: MultiSelectTabsProps) {
-  // Convert workspaces to tabs format and store in state
-  const [tabs, setTabs] = useState<Tab[]>(
-    workspaces.map((ws) => ({
-      id: ws.workspace,
-      label: ws.workspace,
-      files: ws.files,
-      count: ws.count,
-    }))
-  )
+  // Use Zustand store
+  const {
+    tabs,
+    selectedTabs,
+    openAccordions,
+    archivingFiles,
+    removingFiles,
+    initializeWorkspace,
+    toggleTab,
+    setOpenAccordions,
+    archiveFile,
+    completeArchive,
+    cancelArchive,
+    addWorkspace,
+    deleteWorkspace,
+    renameFile,
+  } = useWorkspaceStore()
 
-  // Load saved state from V2WorkspaceService
-  const [selectedTabs, setSelectedTabs] = useState<string[]>(() => {
-    if (typeof window === 'undefined' || !repoUrl) return defaultSelected.length > 0 ? defaultSelected : [tabs[0]?.id].filter(Boolean)
-
-    const savedWorkspaces = V2WorkspaceService.getSelectedWorkspaces(repoUrl)
-    if (savedWorkspaces.length > 0) {
-      // Validate that saved workspaces still exist
-      const validWorkspaces = savedWorkspaces.filter(workspaceId =>
-        tabs.some(tab => tab.id === workspaceId)
-      )
-      if (validWorkspaces.length > 0) {
-        return validWorkspaces
-      }
-    }
-
-    return defaultSelected.length > 0 ? defaultSelected : [tabs[0]?.id].filter(Boolean)
-  })
-
-  // Load open files for each workspace
-  const [openAccordions, setOpenAccordions] = useState<string[]>(() => {
-    if (typeof window === 'undefined' || !repoUrl) return []
-
-    // Collect all open files from all workspaces
-    const allOpenFiles: string[] = []
-    tabs.forEach(tab => {
-      const openFiles = V2WorkspaceService.getOpenFiles(repoUrl, tab.id)
-      allOpenFiles.push(...openFiles)
-    })
-
-    return allOpenFiles
-  })
-
-  const [archivingFiles, setArchivingFiles] = useState<Set<string>>(new Set())
-  const [removingFiles, setRemovingFiles] = useState<Set<string>>(new Set())
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState("")
   const [addError, setAddError] = useState<string | null>(null)
 
-  // Save workspace selection state whenever it changes
+  // Store previous workspaces for deep comparison
+  const prevWorkspacesRef = useRef<V2Workspace.V2WorkspaceGroup[]>([])
+
+  // Initialize store with server data, only when workspaces actually change
   useEffect(() => {
-    if (typeof window === 'undefined' || !repoUrl) return
+    // Deep compare workspaces to avoid unnecessary initialization
+    const hasChanged =
+      workspaces.length !== prevWorkspacesRef.current.length ||
+      workspaces.some((ws, index) => {
+        const prevWs = prevWorkspacesRef.current[index]
+        if (!prevWs) return true
 
-    // Build workspaces object from selectedTabs and tabs
-    const workspacesState: Record<string, boolean> = {}
-    tabs.forEach(tab => {
-      workspacesState[tab.id] = selectedTabs.includes(tab.id)
-    })
-
-    V2WorkspaceService.setWorkspaces(repoUrl, workspacesState)
-  }, [selectedTabs, tabs, repoUrl])
-
-  // Save file open states whenever they change
-  useEffect(() => {
-    if (typeof window === 'undefined' || !repoUrl) return
-
-    // Update file open states for each workspace
-    tabs.forEach(tab => {
-      const files = tab.files || []
-      const workspaceFiles = files.map(file => ({
-        filePath: file.path,
-        open: openAccordions.includes(file.path),
-        draft: undefined // Draft support to be implemented later
-      }))
-
-      V2WorkspaceService.setWorkspaceFiles(repoUrl, tab.id, workspaceFiles)
-    })
-  }, [openAccordions, tabs, repoUrl])
-
-  const toggleTab = (tabId: string) => {
-    setSelectedTabs((prev) => {
-      let newSelection: string[]
-
-      if (prev.includes(tabId)) {
-        // 至少保留一个选中项
-        if (prev.length === 1) return prev
-        newSelection = prev.filter((id) => id !== tabId)
-      } else {
-        // 检查是否超过最大选中数量
-        if (prev.length >= maxSelected) {
-          return prev
+        // Compare workspace name and file count
+        if (ws.workspace !== prevWs.workspace || ws.count !== prevWs.count) {
+          return true
         }
-        newSelection = [...prev, tabId]
-      }
 
-      // 回调通知父组件
-      if (onSelectionChange) {
-        onSelectionChange(newSelection)
-      }
+        // Compare files array
+        if (ws.files?.length !== prevWs.files?.length) {
+          return true
+        }
 
-      return newSelection
-    })
+        // Compare each file path
+        return ws.files?.some((file, fileIndex) => {
+          const prevFile = prevWs.files?.[fileIndex]
+          return file.path !== prevFile?.path || file.filename !== prevFile?.filename
+        })
+      })
+
+    if (hasChanged) {
+      console.log('[MultiSelectTabs] Workspaces changed, initializing store')
+      initializeWorkspace(workspaces, repoUrl, defaultSelected)
+      prevWorkspacesRef.current = workspaces
+    }
+  }, [workspaces, repoUrl, defaultSelected, initializeWorkspace])
+
+  // Notify parent component when selection changes
+  useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(selectedTabs)
+    }
+  }, [selectedTabs, onSelectionChange])
+
+  const handleToggleTab = (tabId: string) => {
+    toggleTab(tabId, maxSelected)
   }
 
   const handleArchive = async (filePath: string) => {
-    setArchivingFiles(prev => new Set(prev).add(filePath))
+    // Start archiving animation
+    archiveFile(filePath)
 
     try {
       // Get current repo
@@ -167,6 +126,9 @@ export function MultiSelectTabs({
       const [domain, owner, repo] = urlParts
 
       // Call V2 API to delete workspace frontmatter
+      const { V2ContentService } = await import("@/services/V2ContentService")
+
+      // TODO: Replace hardcoded test values with real user info
       await V2ContentService.deleteFrontmatter(
         domain,
         owner,
@@ -174,49 +136,24 @@ export function MultiSelectTabs({
         filePath,
         {
           frontmatterKeys: ['workspace'],
-          commitMessage: `Archive ${filePath} by removing workspace`
+          commitMessage: {
+            authorName: 'testname',
+            authorEmail: 'testmail@a.com',
+            message: `Archive ${filePath} by removing workspace`
+          }
         }
       )
 
       console.log(`File ${filePath} archived successfully`)
 
-      // Add to removing files for fade-out animation
-      setRemovingFiles(prev => new Set(prev).add(filePath))
-
       // Wait for animation to complete before removing from state
       setTimeout(() => {
-        // Update tabs state to remove the file
-        setTabs(prevTabs => {
-          return prevTabs.map(tab => ({
-            ...tab,
-            files: tab.files?.filter(file => file.path !== filePath),
-            count: tab.files ? tab.files.filter(file => file.path !== filePath).length : 0
-          }))
-        })
-
-        // Remove from open accordions if it was open
-        setOpenAccordions(prev => prev.filter(path => path !== filePath))
-
-        // Clean up states
-        setArchivingFiles(prev => {
-          const next = new Set(prev)
-          next.delete(filePath)
-          return next
-        })
-        setRemovingFiles(prev => {
-          const next = new Set(prev)
-          next.delete(filePath)
-          return next
-        })
+        completeArchive(filePath)
       }, 300) // Match animation duration
     } catch (error) {
       console.error('Error archiving file:', error)
       alert(`Failed to archive file: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      setArchivingFiles(prev => {
-        const next = new Set(prev)
-        next.delete(filePath)
-        return next
-      })
+      cancelArchive(filePath)
     }
   }
 
@@ -235,85 +172,36 @@ export function MultiSelectTabs({
       return
     }
 
-    // Add workspace to localStorage
-    const success = V2WorkspaceService.addWorkspace(repoUrl, newWorkspaceName.trim())
+    const newWorkspaceId = newWorkspaceName.trim()
 
-    if (success) {
-      const newWorkspaceId = newWorkspaceName.trim()
+    // Add to Zustand store (automatically persisted)
+    addWorkspace(newWorkspaceId)
 
-      // Add to tabs state
-      setTabs(prevTabs => [
-        ...prevTabs,
-        {
-          id: newWorkspaceId,
-          label: newWorkspaceId,
-          files: [],
-          count: 0
-        }
-      ])
-
-      // Automatically select the new workspace
-      setSelectedTabs(prev => {
-        // If we're at max capacity, remove the last selected tab
-        if (prev.length >= maxSelected) {
-          const newSelection = [...prev.slice(0, -1), newWorkspaceId]
-          if (onSelectionChange) {
-            onSelectionChange(newSelection)
-          }
-          return newSelection
-        }
-        // Otherwise, just add it
-        const newSelection = [...prev, newWorkspaceId]
-        if (onSelectionChange) {
-          onSelectionChange(newSelection)
-        }
-        return newSelection
-      })
-
-      // Close dialog and reset form
-      setIsAddDialogOpen(false)
-      setNewWorkspaceName("")
-      setAddError(null)
-
-      console.log(`Workspace "${newWorkspaceId}" created successfully and selected`)
+    // Automatically select the new workspace
+    if (selectedTabs.length >= maxSelected) {
+      // Remove the last selected tab if at max capacity
+      const newSelection = [...selectedTabs.slice(0, -1), newWorkspaceId]
+      useWorkspaceStore.setState({ selectedTabs: newSelection })
     } else {
-      setAddError("Failed to create workspace")
+      // Otherwise, just add it
+      useWorkspaceStore.setState({ selectedTabs: [...selectedTabs, newWorkspaceId] })
     }
+
+    // Close dialog and reset form
+    setIsAddDialogOpen(false)
+    setNewWorkspaceName("")
+    setAddError(null)
+
+    console.log(`Workspace "${newWorkspaceId}" created successfully and selected`)
   }
 
   const handleDeleteWorkspace = (workspaceId: string) => {
-    // Remove from tabs state
-    setTabs(prevTabs => prevTabs.filter(tab => tab.id !== workspaceId))
-
-    // Remove from selected tabs if it was selected
-    setSelectedTabs(prev => {
-      const newSelection = prev.filter(id => id !== workspaceId)
-      // If this was the only selected tab, select the first remaining tab
-      if (newSelection.length === 0 && tabs.length > 1) {
-        const firstRemainingTab = tabs.find(tab => tab.id !== workspaceId)
-        if (firstRemainingTab) {
-          if (onSelectionChange) {
-            onSelectionChange([firstRemainingTab.id])
-          }
-          return [firstRemainingTab.id]
-        }
-      }
-      if (onSelectionChange) {
-        onSelectionChange(newSelection)
-      }
-      return newSelection
-    })
-
-    // Remove from localStorage
-    const state = V2WorkspaceService.loadUIState(repoUrl)
-    if (state) {
-      delete state.workspaces[workspaceId]
-      delete state.files[workspaceId]
-      V2WorkspaceService.saveUIState(repoUrl, state)
-    }
+    // Remove from Zustand store (automatically persisted)
+    deleteWorkspace(workspaceId)
 
     console.log(`Workspace "${workspaceId}" deleted successfully`)
   }
+
 
   const handleRename = async (oldPath: string, newPath: string) => {
     try {
@@ -338,20 +226,8 @@ export function MultiSelectTabs({
       if (response.success) {
         console.log(`File renamed successfully from ${oldPath} to ${newPath}`)
 
-        // Update tabs state to reflect the new path
-        setTabs(prevTabs => {
-          return prevTabs.map(tab => ({
-            ...tab,
-            files: tab.files?.map(file =>
-              file.path === oldPath
-                ? { ...file, path: newPath, filename: newPath.split('/').pop() || newPath }
-                : file
-            ),
-          }))
-        })
-
-        // Update open accordions if the renamed file was open
-        setOpenAccordions(prev => prev.map(path => path === oldPath ? newPath : path))
+        // Update Zustand store (automatically persisted)
+        renameFile(oldPath, newPath)
 
         alert(`Successfully renamed to ${newPath}`)
       } else {
@@ -371,7 +247,7 @@ export function MultiSelectTabs({
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => toggleTab(tab.id)}
+              onClick={() => handleToggleTab(tab.id)}
               className={cn(
                 "inline-flex items-center gap-2 justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -466,13 +342,8 @@ export function MultiSelectTabs({
                         <FileAccordionContent
                           filePath={file.path}
                           repoUrl={repoUrl}
-                        >
-                          <div className="text-sm text-muted-foreground space-y-1 mt-4">
-                            <div>Path: {file.path}</div>
-                            <div>Workspace: {file.workspace}</div>
-                            <div>Line: {file.line}</div>
-                          </div>
-                        </FileAccordionContent>
+                        />
+
                       </FileAccordionItem>
                     </div>
                   ))

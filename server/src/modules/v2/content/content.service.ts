@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { V2Content } from '@shared/index';
 import { ConfigService } from '../config/config.service';
+import { GitUtil } from '../../../utils/git.util';
 
 interface SaveMarkdownOptions {
   commitMessage: string;
@@ -169,7 +170,19 @@ export class V2ContentService {
       // Get updated file stats
       const newStats = await fs.stat(fullPath);
 
-      // TODO: Git operations will be added later if needed
+      // Git operations
+      const gitUtil = new GitUtil(repoLocalPath);
+
+      // Add file to git
+      await gitUtil.addFiles(filePath);
+
+      // Create commit
+      await gitUtil.commit({
+        commitMessage: options.commitMessage,
+        authorName: options.authorName,
+        authorEmail: options.authorEmail,
+        filePath: filePath
+      });
 
       return {
         path: filePath,
@@ -263,7 +276,19 @@ export class V2ContentService {
       // Get updated file stats
       const newStats = await fs.stat(fullPath);
 
-      // TODO: Git operations will be added later if needed
+      // Git operations
+      const gitUtil = new GitUtil(repoLocalPath);
+
+      // Add file to git
+      await gitUtil.addFiles(filePath);
+
+      // Create commit
+      await gitUtil.commit({
+        commitMessage: options.commitMessage,
+        authorName: options.authorName,
+        authorEmail: options.authorEmail,
+        filePath: filePath
+      });
 
       return {
         path: filePath,
@@ -332,6 +357,86 @@ export class V2ContentService {
       };
     } catch (error) {
       throw new Error(`Failed to read file content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Create or update file content
+   * @param repoUrl - Repository URL
+   * @param filePath - File path relative to repository root
+   * @param content - File content
+   * @param frontmatter - Optional frontmatter for markdown files
+   * @param options - Commit options
+   * @returns Result with file information
+   */
+  async createOrUpdateFile(
+    repoUrl: string,
+    filePath: string,
+    content: string,
+    frontmatter: Record<string, any> | undefined,
+    options: SaveMarkdownOptions
+  ): Promise<V2Content.V2CreateOrUpdateFileResult> {
+    // Security check: prevent directory traversal
+    if (!this.isSafePath(filePath)) {
+      throw new Error('Invalid file path: contains invalid characters or attempts directory traversal');
+    }
+
+    // Get repository local path
+    const repoLocalPath = await this.getRepoLocalPath(repoUrl);
+    const fullPath = path.join(repoLocalPath, filePath);
+
+    try {
+      // Check if file exists
+      let fileExists = false;
+      try {
+        const stats = await fs.stat(fullPath);
+        fileExists = stats.isFile();
+      } catch (error) {
+        // File doesn't exist, will create it
+        fileExists = false;
+      }
+
+      // Prepare content to write
+      let finalContent = content;
+
+      // If it's a markdown file and frontmatter is provided, combine them
+      if (this.isMarkdownFile(filePath) && frontmatter) {
+        finalContent = this.combineMarkdownContent(content, frontmatter);
+      }
+
+      // Ensure parent directory exists
+      const parentDir = path.dirname(fullPath);
+      await fs.mkdir(parentDir, { recursive: true });
+
+      // Write file
+      await fs.writeFile(fullPath, finalContent, 'utf8');
+
+      // Get file stats
+      const newStats = await fs.stat(fullPath);
+
+      // Git operations
+      const gitUtil = new GitUtil(repoLocalPath);
+
+      // Add file to git
+      await gitUtil.addFiles(filePath);
+
+      // Create commit
+      await gitUtil.commit({
+        commitMessage: options.commitMessage,
+        authorName: options.authorName,
+        authorEmail: options.authorEmail,
+        filePath: filePath
+      });
+
+      return {
+        path: filePath,
+        size: newStats.size,
+        created: !fileExists,
+        lastModified: newStats.mtime.toISOString(),
+      };
+
+    } catch (error) {
+      throw new Error(`Failed to create/update file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

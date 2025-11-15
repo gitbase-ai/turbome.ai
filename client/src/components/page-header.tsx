@@ -21,11 +21,11 @@ import { Search, File, FileText, Plus } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { V2SearchService } from "@/services/V2SearchService"
 import { V2RepoService } from "@/services/V2RepoService"
-import { V2WorkspaceService } from "@/services/V2WorkspaceService"
 import { V2ContentService } from "@/services/V2ContentService"
-import { V2Search, V2Workspace } from "@shared/index"
+import { V2Search } from "@shared/index"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useWorkspaceStore } from "@/stores/workspaceStore"
 
 interface PageHeaderProps {
   breadcrumbs?: { label: string; href?: string }[]
@@ -37,10 +37,14 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<V2Search.V2SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [workspaces, setWorkspaces] = useState<string[]>([]) // Store workspace names only
-  const [repoUrl, setRepoUrl] = useState<string>("")
+  const [repoName, setRepoName] = useState<string>("TurboMe")
   const [fileWorkspaceMap, setFileWorkspaceMap] = useState<Record<string, string | null>>({}) // filePath -> workspace name
   const searchContainerRef = useRef<HTMLDivElement>(null)
+
+  // Get workspace data from Zustand store
+  const getFileWorkspace = useWorkspaceStore(state => state.getFileWorkspace)
+  const getWorkspaceNames = useWorkspaceStore(state => state.getWorkspaceNames)
+  const workspaces = getWorkspaceNames()
 
   // Handle click outside to close search
   useEffect(() => {
@@ -59,22 +63,22 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
     }
   }, [open])
 
-  // Load workspaces from V2WorkspaceService (with cache and API fallback)
+  // Load repo name
   useEffect(() => {
-    const loadWorkspaces = async () => {
+    const loadRepoName = async () => {
       try {
         const currentRepo = await V2RepoService.getCurrentRepo()
         const url = currentRepo.url
-        setRepoUrl(url)
 
-        // Get workspace names (will use cache or fetch from API if needed)
-        const workspaceNames = await V2WorkspaceService.getWorkspaceNames(url)
-        setWorkspaces(workspaceNames)
+        // Extract repo name from URL (same logic as repository-switcher)
+        const parts = url.split('/')
+        const name = parts[parts.length - 1] || url
+        setRepoName(name)
       } catch (error) {
-        console.error('Failed to load workspaces:', error)
+        console.error('Failed to load repo name:', error)
       }
     }
-    loadWorkspaces()
+    loadRepoName()
   }, [])
 
   // Debounced search effect
@@ -119,18 +123,18 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
 
   // Check which workspace each search result file belongs to
   useEffect(() => {
-    if (!repoUrl || searchResults.length === 0) {
+    if (searchResults.length === 0) {
       setFileWorkspaceMap({})
       return
     }
 
     const map: Record<string, string | null> = {}
     searchResults.forEach(result => {
-      const workspace = V2WorkspaceService.getFileWorkspace(repoUrl, result.path)
+      const workspace = getFileWorkspace(result.path)
       map[result.path] = workspace
     })
     setFileWorkspaceMap(map)
-  }, [searchResults, repoUrl])
+  }, [searchResults, getFileWorkspace])
 
   const handleAddToWorkspace = async (filePath: string, workspaceName: string) => {
     try {
@@ -140,28 +144,19 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
       if (urlParts.length === 3) {
         const [domain, owner, repo] = urlParts
 
+        // TODO: Replace hardcoded test values with real user info
         await V2ContentService.updateFrontmatter(domain, owner, repo, filePath, {
           frontmatterUpdates: { workspace: workspaceName },
-          commitMessage: `Add ${filePath} to workspace ${workspaceName}`
+          commitMessage: {
+            authorName: 'testname',
+            authorEmail: 'testmail@a.com',
+            message: `Add ${filePath} to workspace ${workspaceName}`
+          }
         })
 
-        // Update localStorage to add this file to the workspace
-        const currentRepoUrl = currentRepo.url
-        const existingFiles = V2WorkspaceService.getWorkspaceFiles(currentRepoUrl, workspaceName)
-
-        // Check if file already exists
-        if (!existingFiles.some(f => f.filePath === filePath)) {
-          existingFiles.push({
-            filePath,
-            open: false,
-            draft: undefined
-          })
-          V2WorkspaceService.setWorkspaceFiles(currentRepoUrl, workspaceName, existingFiles)
-        }
-
-        // Dispatch custom event to notify workspace page
+        // Dispatch custom event to notify workspace page to refresh
         window.dispatchEvent(new CustomEvent('workspace-file-added', {
-          detail: { workspaceName, filePath, repoUrl: currentRepoUrl }
+          detail: { workspaceName, filePath, repoUrl: currentRepo.url }
         }))
 
         // Update local state to show the badge immediately
@@ -190,7 +185,7 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
           <BreadcrumbList>
             <BreadcrumbItem className="hidden md:block">
               <BreadcrumbLink href="/">
-                TurboMe
+                {repoName}
               </BreadcrumbLink>
             </BreadcrumbItem>
             {breadcrumbs.map((item, index) => (

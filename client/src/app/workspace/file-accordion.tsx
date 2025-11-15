@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import * as AccordionPrimitive from "@radix-ui/react-accordion"
-import { ChevronRight, Archive, MoreHorizontal } from "lucide-react"
+import { ChevronRight, Archive, MoreHorizontal, Save } from "lucide-react"
+import { useWorkspaceStore } from "@/stores/workspaceStore"
 import { cn } from "@/lib/utils"
 import MilkdownEditor, { MilkdownEditorRef } from "@/components/MilkdownEditor"
 import {
@@ -67,6 +68,13 @@ function FileAccordionTrigger({
   onRename?: (oldPath: string, newPath: string) => void
   filePath?: string
 }) {
+  // Get save states from Zustand store
+  const isDirty = useWorkspaceStore(state => state.dirtyFiles.has(filePath || ''))
+  const isSaving = useWorkspaceStore(state => state.savingFiles.has(filePath || ''))
+  const isSaved = useWorkspaceStore(state => state.savedFiles.has(filePath || ''))
+
+  // Get save handler invoker from Zustand store
+  const invokeSaveHandler = useWorkspaceStore(state => state.invokeSaveHandler)
   const [archivePopoverOpen, setArchivePopoverOpen] = React.useState(false)
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false)
   const [newPath, setNewPath] = React.useState("")
@@ -188,6 +196,38 @@ function FileAccordionTrigger({
 
         {/* 右侧操作按钮 */}
         <div className="flex items-center gap-1">
+          {/* Save 按钮 - only show when dirty */}
+          {isDirty && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (filePath) {
+                  invokeSaveHandler(filePath)
+                }
+              }}
+              disabled={isSaving || isSaved}
+              className={cn(
+                "focus-visible:border-ring focus-visible:ring-ring/50 flex items-center justify-center rounded-md p-2 transition-all outline-none hover:bg-muted focus-visible:ring-[3px]",
+                (isSaving || isSaved) && "cursor-not-allowed opacity-50",
+                isSaved && "text-green-600"
+              )}
+              title={isSaving ? "Saving..." : isSaved ? "Saved" : "Save"}
+            >
+              {isSaving ? (
+                <svg className="animate-spin size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 818-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : isSaved ? (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="size-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              ) : (
+                <Save className="text-muted-foreground size-4" />
+              )}
+            </button>
+          )}
+
           {/* Archive 按钮 with Popover confirmation */}
           <Popover open={archivePopoverOpen} onOpenChange={setArchivePopoverOpen}>
             <PopoverTrigger asChild>
@@ -340,16 +380,16 @@ const EnhancedTextEditor = ({
   fileType,
   className,
   editorRef,
-  onEdit
+  onChange
 }: {
   content: string
   fileType?: string
   className?: string
   editorRef?: (ref: MilkdownEditorRef | null) => void
-  onEdit?: () => void
+  onChange?: () => void
 }) => {
   return (
-    <div onClick={onEdit}>
+    <div className="relative" onClick={onChange}>
       <MilkdownEditor
         ref={editorRef}
         content={content}
@@ -374,10 +414,20 @@ function FileAccordionContent({
   ...props
 }: FileAccordionContentProps) {
   const [content, setContent] = React.useState<string | null>(null)
+  const [originalContent, setOriginalContent] = React.useState<string | null>(null)
+  const [frontmatter, setFrontmatter] = React.useState<Record<string, unknown> | undefined>(undefined)
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [fileType, setFileType] = React.useState<string>('text')
   const editorRef = React.useRef<MilkdownEditorRef | null>(null)
+
+  // Get Zustand actions
+  const markFileDirty = useWorkspaceStore(state => state.markFileDirty)
+  const startSaving = useWorkspaceStore(state => state.startSaving)
+  const completeSave = useWorkspaceStore(state => state.completeSave)
+  const cancelSave = useWorkspaceStore(state => state.cancelSave)
+  const registerSaveHandler = useWorkspaceStore(state => state.registerSaveHandler)
+  const unregisterSaveHandler = useWorkspaceStore(state => state.unregisterSaveHandler)
 
   React.useEffect(() => {
     const loadContent = async () => {
@@ -400,6 +450,8 @@ function FileAccordionContent({
 
           if (response.success && response.data) {
             setContent(response.data.content)
+            setOriginalContent(response.data.content)
+            setFrontmatter(response.data.frontmatter)
 
             // Extract file extension for fileType
             const extension = filePath.split('.').pop() || 'text'
@@ -423,12 +475,87 @@ function FileAccordionContent({
     editorRef.current = ref
   }, [])
 
+  // Handle editor change to mark as dirty
+  const handleEditorChange = React.useCallback(() => {
+    if (!filePath) return
+
+    // Mark file as dirty when edited
+    markFileDirty(filePath)
+  }, [filePath, markFileDirty])
+
+  // Handle save
+  const handleSave = React.useCallback(async () => {
+    if (!filePath || !repoUrl || !editorRef.current) return
+
+    startSaving(filePath)
+    setError(null)
+
+    try {
+      const { V2ContentService } = await import("@/services/V2ContentService")
+      const { V2RepoService } = await import("@/services/V2RepoService")
+
+      const currentRepo = await V2RepoService.getCurrentRepo()
+      const urlParts = currentRepo.url.split('/')
+
+      if (urlParts.length === 3) {
+        const [domain, owner, repo] = urlParts
+
+        // Get current content from editor
+        const currentContent = editorRef.current.getContent()
+
+        // Call create/update API
+        // TODO: Replace hardcoded test values with real user info
+        const response = await V2ContentService.createOrUpdateFile(
+          domain,
+          owner,
+          repo,
+          filePath,
+          {
+            content: currentContent,
+            frontmatter: frontmatter,
+            commitMessage: {
+              authorName: 'testname',
+              authorEmail: 'testmail@a.com',
+              message: `Update ${filePath}`
+            }
+          }
+        )
+
+        if (response.success) {
+          // Update local content state to match saved content
+          setContent(currentContent)
+          setOriginalContent(currentContent)
+          completeSave(filePath)
+        } else {
+          setError(response.message || 'Failed to save file')
+          cancelSave(filePath)
+        }
+      }
+    } catch (err) {
+      console.error('Error saving file:', err)
+      setError(err instanceof Error ? err.message : 'Unknown error')
+      cancelSave(filePath)
+    }
+  }, [filePath, repoUrl, frontmatter, startSaving, completeSave, cancelSave])
+
+  // Register save handler in Zustand store
+  React.useEffect(() => {
+    if (filePath && handleSave) {
+      registerSaveHandler(filePath, handleSave)
+
+      // Cleanup: unregister when component unmounts or filePath changes
+      return () => {
+        unregisterSaveHandler(filePath)
+      }
+    }
+  }, [filePath, handleSave, registerSaveHandler, unregisterSaveHandler])
+
   return (
     <AccordionPrimitive.Content
-      data-slot="accordion-content"
-      className="data-[state=closed]:animate-accordion-up data-[state=closed]:overflow-hidden data-[state=open]:animate-accordion-down data-[state=open]:overflow-visible text-sm"
-      {...props}
-    >
+        data-slot="accordion-content"
+        className="data-[state=closed]:animate-accordion-up data-[state=closed]:overflow-hidden data-[state=open]:animate-accordion-down data-[state=open]:overflow-visible text-sm"
+        {...props}
+      >
       <div className={cn("pt-0 pb-4", className)}>
         {filePath && repoUrl ? (
           <div>
@@ -450,6 +577,7 @@ function FileAccordionContent({
                   fileType={fileType}
                   className="mt-2"
                   editorRef={setEditorRefCallback}
+                  onChange={handleEditorChange}
                 />
               </div>
             ) : null}

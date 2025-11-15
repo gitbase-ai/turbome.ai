@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Delete, Body, Param, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { V2ContentService } from './content.service';
 import { V2Content } from '@shared/index';
@@ -69,6 +69,131 @@ export class V2ContentController {
     }
   }
 
+  @Post(':domain/:owner/:repo/contents/:path(*)')
+  @ApiOperation({
+    summary: 'Create or update file content (V2)',
+    description: 'Create a new file or update existing file content. For markdown files, can include frontmatter. V2 API uses repo URL in path.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['content', 'commitMessage'],
+      properties: {
+        content: {
+          type: 'string',
+          description: 'File content (without frontmatter for markdown files)',
+          example: '# Hello World\n\nThis is a markdown file.'
+        },
+        frontmatter: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Frontmatter object (only for markdown files)',
+          example: { title: 'My Document', author: 'John Doe' }
+        },
+        commitMessage: {
+          type: 'object',
+          description: 'Git commit information',
+          required: ['authorName', 'authorEmail', 'message'],
+          properties: {
+            authorName: {
+              type: 'string',
+              description: 'Git commit author name',
+              example: 'John Doe'
+            },
+            authorEmail: {
+              type: 'string',
+              description: 'Git commit author email',
+              example: 'john@example.com'
+            },
+            message: {
+              type: 'string',
+              description: 'Git commit message',
+              example: 'Create new document'
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'File created or updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            size: { type: 'number' },
+            created: { type: 'boolean', description: 'true if file was created, false if updated' },
+            lastModified: { type: 'string', format: 'date-time' }
+          }
+        },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 404, description: 'Repository not found' })
+  async createOrUpdateFile(
+    @Param('domain') domain: string,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+    @Param('path') filePath: string,
+    @Body() body: V2Content.V2CreateOrUpdateFileRequest
+  ): Promise<V2Content.V2CreateOrUpdateFileResponse> {
+    try {
+      const repoUrl = `${domain}/${owner}/${repo}`;
+
+      if (!body.content && body.content !== '') {
+        throw new BadRequestException('content is required');
+      }
+
+      if (!body.commitMessage) {
+        throw new BadRequestException('commitMessage is required');
+      }
+
+      if (!body.commitMessage.authorName || !body.commitMessage.authorEmail || !body.commitMessage.message) {
+        throw new BadRequestException('commitMessage must include authorName, authorEmail, and message');
+      }
+
+      const result = await this.contentService.createOrUpdateFile(
+        repoUrl,
+        filePath,
+        body.content,
+        body.frontmatter,
+        {
+          commitMessage: body.commitMessage.message,
+          authorName: body.commitMessage.authorName,
+          authorEmail: body.commitMessage.authorEmail
+        }
+      );
+
+      return {
+        success: true,
+        data: result,
+        message: result.created
+          ? `Successfully created file ${filePath}`
+          : `Successfully updated file ${filePath}`
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while creating/updating file';
+
+      if (errorMessage.includes('not found')) {
+        throw new NotFoundException(errorMessage);
+      }
+
+      if (errorMessage.includes('Invalid')) {
+        throw new BadRequestException(errorMessage);
+      }
+
+      throw new InternalServerErrorException('Failed to create/update file');
+    }
+  }
+
   @Put(':domain/:owner/:repo/frontmatters/:path(*)')
   @ApiOperation({
     summary: 'Update markdown frontmatter (V2)',
@@ -86,17 +211,26 @@ export class V2ContentController {
           example: { status: 'published', author: 'John Doe' }
         },
         commitMessage: {
-          type: 'string',
-          description: 'Git commit message',
-          example: 'Update document metadata'
-        },
-        authorName: {
-          type: 'string',
-          description: 'Git commit author name (optional)'
-        },
-        authorEmail: {
-          type: 'string',
-          description: 'Git commit author email (optional)'
+          type: 'object',
+          description: 'Git commit information',
+          required: ['authorName', 'authorEmail', 'message'],
+          properties: {
+            authorName: {
+              type: 'string',
+              description: 'Git commit author name',
+              example: 'John Doe'
+            },
+            authorEmail: {
+              type: 'string',
+              description: 'Git commit author email',
+              example: 'john@example.com'
+            },
+            message: {
+              type: 'string',
+              description: 'Git commit message',
+              example: 'Update document metadata'
+            }
+          }
         }
       }
     }
@@ -137,12 +271,7 @@ export class V2ContentController {
     @Param('owner') owner: string,
     @Param('repo') repo: string,
     @Param('path') filePath: string,
-    @Body() body: {
-      frontmatterUpdates: Record<string, any>;
-      commitMessage: string;
-      authorName?: string;
-      authorEmail?: string;
-    }
+    @Body() body: V2Content.V2UpdateFrontmatterRequest
   ): Promise<V2Content.V2UpdateFrontmatterResponse> {
     try {
       const repoUrl = `${domain}/${owner}/${repo}`;
@@ -159,14 +288,18 @@ export class V2ContentController {
         throw new BadRequestException('commitMessage is required');
       }
 
+      if (!body.commitMessage.authorName || !body.commitMessage.authorEmail || !body.commitMessage.message) {
+        throw new BadRequestException('commitMessage must include authorName, authorEmail, and message');
+      }
+
       const result = await this.contentService.updateFrontmatter(
         repoUrl,
         filePath,
         body.frontmatterUpdates,
         {
-          commitMessage: body.commitMessage,
-          authorName: body.authorName,
-          authorEmail: body.authorEmail
+          commitMessage: body.commitMessage.message,
+          authorName: body.commitMessage.authorName,
+          authorEmail: body.commitMessage.authorEmail
         }
       );
 
@@ -208,17 +341,26 @@ export class V2ContentController {
           example: ['status', 'draft']
         },
         commitMessage: {
-          type: 'string',
-          description: 'Git commit message',
-          example: 'Remove draft status from document'
-        },
-        authorName: {
-          type: 'string',
-          description: 'Git commit author name (optional)'
-        },
-        authorEmail: {
-          type: 'string',
-          description: 'Git commit author email (optional)'
+          type: 'object',
+          description: 'Git commit information',
+          required: ['authorName', 'authorEmail', 'message'],
+          properties: {
+            authorName: {
+              type: 'string',
+              description: 'Git commit author name',
+              example: 'John Doe'
+            },
+            authorEmail: {
+              type: 'string',
+              description: 'Git commit author email',
+              example: 'john@example.com'
+            },
+            message: {
+              type: 'string',
+              description: 'Git commit message',
+              example: 'Remove draft status from document'
+            }
+          }
         }
       }
     }
@@ -259,12 +401,7 @@ export class V2ContentController {
     @Param('owner') owner: string,
     @Param('repo') repo: string,
     @Param('path') filePath: string,
-    @Body() body: {
-      frontmatterKeys: string[];
-      commitMessage: string;
-      authorName?: string;
-      authorEmail?: string;
-    }
+    @Body() body: V2Content.V2DeleteFrontmatterRequest
   ): Promise<V2Content.V2DeleteFrontmatterResponse> {
     try {
       const repoUrl = `${domain}/${owner}/${repo}`;
@@ -277,14 +414,18 @@ export class V2ContentController {
         throw new BadRequestException('commitMessage is required');
       }
 
+      if (!body.commitMessage.authorName || !body.commitMessage.authorEmail || !body.commitMessage.message) {
+        throw new BadRequestException('commitMessage must include authorName, authorEmail, and message');
+      }
+
       const result = await this.contentService.deleteFrontmatter(
         repoUrl,
         filePath,
         body.frontmatterKeys,
         {
-          commitMessage: body.commitMessage,
-          authorName: body.authorName,
-          authorEmail: body.authorEmail
+          commitMessage: body.commitMessage.message,
+          authorName: body.commitMessage.authorName,
+          authorEmail: body.commitMessage.authorEmail
         }
       );
 

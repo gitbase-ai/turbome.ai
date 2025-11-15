@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
       ];
     },
   }),
-  
+
   // 生产环境：静态导出
   ...(!isDev && {
     output: 'export',
@@ -25,6 +25,17 @@ const nextConfig: NextConfig = {
       unoptimized: true,
     },
   }),
+
+  // 启用 Source Maps
+  productionBrowserSourceMaps: true,
+
+  // Webpack 配置 - 确保 source maps 生成
+  webpack: (config, { dev, isServer }) => {
+    if (!dev && !isServer) {
+      config.devtool = 'source-map';
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

@@ -67,7 +67,7 @@ const MilkdownEditor = forwardRef<MilkdownEditorRef, MilkdownEditorProps>(({
       }
       return content // fallback to original content
     },
-    setContent: (newContent: string) => {
+    setContent: (_newContent: string) => {
       // For now, setContent is not supported in this version of Crepe
       // This would require reinitializing the editor with new content
       console.warn('setContent not implemented - would require editor reinitialization')

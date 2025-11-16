@@ -23,7 +23,8 @@ export class V2TreeService {
     path: string = '',
     recursive: boolean = false
   ): Promise<V2Tree.TreeResponse> {
-    const pathSegment = path ? `/${path}` : '';
+    // Always add trailing slash: root -> /trees/, path -> /trees/path1/path2
+    const pathSegment = path ? `/${path}` : '/';
     const url = `${this.BASE_URL}/repos/${domain}/${owner}/${repo}/trees${pathSegment}`;
 
     const params = new URLSearchParams();

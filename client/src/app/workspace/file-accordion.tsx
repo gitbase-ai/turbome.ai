@@ -34,6 +34,7 @@ import {
   CommandItem,
 } from "@/components/ui/command"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 function FileAccordion({
   ...props
@@ -84,54 +85,29 @@ function FileAccordionTrigger({
   React.useEffect(() => {
     if (renameDialogOpen && filePath) {
       setNewPath(filePath)
-
-      // Load initial suggestions for the current directory
-      const lastSlashIndex = filePath.lastIndexOf('/')
-      if (lastSlashIndex >= 0) {
-        const dirPath = filePath.substring(0, lastSlashIndex)
-        loadPathSuggestions(dirPath)
-      } else {
-        // Load root directory suggestions
-        loadPathSuggestions('')
-      }
+      // Load initial suggestions based on current input
+      loadPathSuggestions(filePath)
     }
   }, [renameDialogOpen, filePath])
 
   // Handle path input change and load suggestions
   const handlePathChange = (value: string) => {
     setNewPath(value)
-
-    // Extract directory part for suggestions
-    const lastSlashIndex = value.lastIndexOf('/')
-    if (lastSlashIndex >= 0) {
-      const dirPath = value.substring(0, lastSlashIndex)
-      loadPathSuggestions(dirPath)
-    } else {
-      // Load root directory suggestions if no slash
-      loadPathSuggestions('')
-    }
+    // Directly load suggestions based on user input
+    loadPathSuggestions(value)
   }
 
   // Handle directory selection from suggestions
   const handleSelectDirectory = (dirPath: string) => {
-    // Get the current filename
-    const lastSlashIndex = (filePath || '').lastIndexOf('/')
-    const filename = lastSlashIndex >= 0
-      ? (filePath || '').substring(lastSlashIndex + 1)
-      : (filePath || '')
-
-    // Combine selected directory with filename
-    const newFullPath = dirPath ? `${dirPath}/${filename}` : filename
-    setNewPath(newFullPath)
-
+    // Directly use the selected directory path
+    setNewPath(dirPath)
     // Load suggestions for the selected directory
     loadPathSuggestions(dirPath)
   }
 
   // Load path suggestions from tree API
-  const loadPathSuggestions = async (dirPath: string) => {
+  const loadPathSuggestions = async (inputPath: string) => {
     try {
-      // We need to get repo info to call the tree API
       const { V2RepoService } = await import("@/services/V2RepoService")
       const { V2TreeService } = await import("@/services/V2TreeService")
 
@@ -141,19 +117,17 @@ function FileAccordionTrigger({
       if (urlParts.length === 3) {
         const [domain, owner, repo] = urlParts
 
-        // Fetch directory tree
-        const response = await V2TreeService.getTree(domain, owner, repo, dirPath, false)
+        // Normalize path: remove leading slash if present
+        const normalizedPath = inputPath.startsWith('/') ? inputPath.substring(1) : inputPath
+
+        // Call API with the exact path user typed
+        const response = await V2TreeService.getTree(domain, owner, repo, normalizedPath, false)
 
         if (response.success && response.data) {
           // Extract directory entries and create path suggestions
           const suggestions = response.data.entries
             .filter(entry => entry.type === 'directory')
             .map(entry => entry.path)
-
-          // Add root directory option if we're not already at root
-          if (dirPath !== '') {
-            suggestions.unshift('')
-          }
 
           setPathSuggestions(suggestions)
         } else {
@@ -190,8 +164,15 @@ function FileAccordionTrigger({
         </AccordionPrimitive.Trigger>
 
         {/* 文件标题 */}
-        <div className="flex-1 py-4 text-left text-sm font-medium">
+        <div className="flex-1 py-4 text-left text-sm font-medium flex items-center gap-2">
           {children}
+          {/* Dirty indicator dot */}
+          {isDirty && (
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60"
+              title="Unsaved changes"
+            />
+          )}
         </div>
 
         {/* 右侧操作按钮 */}
@@ -322,7 +303,7 @@ function FileAccordionTrigger({
               Enter the new path for this file. You can change the filename or move it to a different directory.
             </DialogDescription>
           </DialogHeader>
-          <Command className="rounded-lg border">
+          <Command className="rounded-lg border" shouldFilter={false}>
             <CommandInput
               placeholder="Enter new path..."
               value={newPath}
@@ -330,7 +311,32 @@ function FileAccordionTrigger({
             />
             <CommandList>
               {pathSuggestions.length === 0 ? (
-                <CommandEmpty>No directories found. Type the new path directly.</CommandEmpty>
+                // Only show suggested filename if current input doesn't contain .md
+                !newPath.includes('.md') ? (
+                  <div className="p-4 space-y-2">
+                    <p className="text-sm text-muted-foreground">Suggested filename:</p>
+                    <Badge
+                      variant="secondary"
+                      className="cursor-pointer hover:bg-accent"
+                      onClick={() => {
+                        // Get original filename
+                        const originalFilename = (filePath || '').split('/').pop() || ''
+                        // Combine current input with original filename
+                        const suggestedPath = newPath
+                          ? (newPath.endsWith('/') ? `${newPath}${originalFilename}` : `${newPath}/${originalFilename}`)
+                          : originalFilename
+                        setNewPath(suggestedPath)
+                      }}
+                    >
+                      {(() => {
+                        const originalFilename = (filePath || '').split('/').pop() || ''
+                        return newPath
+                          ? (newPath.endsWith('/') ? `${newPath}${originalFilename}` : `${newPath}/${originalFilename}`)
+                          : originalFilename
+                      })()}
+                    </Badge>
+                  </div>
+                ) : null
               ) : (
                 <CommandGroup heading="Available Directories">
                   {pathSuggestions.map((suggestion) => (

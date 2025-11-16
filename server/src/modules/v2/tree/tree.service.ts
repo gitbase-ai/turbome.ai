@@ -37,7 +37,8 @@ export class TreeService {
       }
     } catch (error) {
       if (error.code === 'ENOENT') {
-        throw new Error('Path does not exist');
+        // Path doesn't exist - try prefix matching in parent directory
+        return this.getTreeWithPrefixMatch(repoPath, normalizedTreePath, recursive);
       }
       throw error;
     }
@@ -96,6 +97,42 @@ export class TreeService {
     });
 
     return treeEntries;
+  }
+
+  /**
+   * Get tree entries with prefix matching when exact path doesn't exist
+   * Falls back to parent directory and filters by prefix
+   */
+  private async getTreeWithPrefixMatch(
+    repoPath: string,
+    treePath: string,
+    recursive: boolean = false,
+  ): Promise<V2Tree.TreeEntry[]> {
+    // Extract parent directory and prefix
+    const lastSlashIndex = treePath.lastIndexOf('/');
+    let parentPath: string;
+    let prefix: string;
+
+    if (lastSlashIndex > 0) {
+      // Has parent directory: "dir1/draf" -> parent = "dir1", prefix = "draf"
+      parentPath = treePath.substring(0, lastSlashIndex);
+      prefix = treePath.substring(lastSlashIndex + 1);
+    } else {
+      // At root level: "draf" -> parent = "", prefix = "draf"
+      parentPath = '';
+      prefix = treePath;
+    }
+
+    // Get parent directory entries
+    const parentEntries = await this.getTree(repoPath, parentPath, recursive);
+
+    // Filter by prefix (case-insensitive)
+    const lowerPrefix = prefix.toLowerCase();
+    const filteredEntries = parentEntries.filter(entry =>
+      entry.name.toLowerCase().startsWith(lowerPrefix)
+    );
+
+    return filteredEntries;
   }
 
   /**

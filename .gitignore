@@ -38,6 +38,9 @@ coverage/
 .npm
 .eslintcache
 
+# TypeScript
+*.tsbuildinfo
+
 # Temporary folders
 tmp/
 temp/

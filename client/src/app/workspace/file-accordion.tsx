@@ -11,6 +11,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
 import {
   Popover,
@@ -61,12 +65,14 @@ function FileAccordionTrigger({
   onArchive,
   isArchiving,
   onRename,
+  onMoveTo,
   filePath,
   ...props
 }: React.ComponentProps<typeof AccordionPrimitive.Trigger> & {
   onArchive?: () => void
   isArchiving?: boolean
   onRename?: (oldPath: string, newPath: string) => void
+  onMoveTo?: (filePath: string, targetWorkspace: string) => void
   filePath?: string
 }) {
   // Get save states from Zustand store
@@ -74,8 +80,14 @@ function FileAccordionTrigger({
   const isSaving = useWorkspaceStore(state => state.savingFiles.has(filePath || ''))
   const isSaved = useWorkspaceStore(state => state.savedFiles.has(filePath || ''))
 
-  // Get save handler invoker from Zustand store
+  // Get save handler invoker and workspace info from Zustand store
   const invokeSaveHandler = useWorkspaceStore(state => state.invokeSaveHandler)
+  const getWorkspaceNames = useWorkspaceStore(state => state.getWorkspaceNames)
+  const getFileWorkspace = useWorkspaceStore(state => state.getFileWorkspace)
+
+  // Get all workspace names and current file's workspace
+  const allWorkspaces = getWorkspaceNames()
+  const currentWorkspace = getFileWorkspace(filePath || '')
   const [archivePopoverOpen, setArchivePopoverOpen] = React.useState(false)
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false)
   const [newPath, setNewPath] = React.useState("")
@@ -287,7 +299,31 @@ function FileAccordionTrigger({
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem>Duplicate</DropdownMenuItem>
-              <DropdownMenuItem>Move to...</DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Move to</DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent>
+                    {allWorkspaces
+                      .filter(workspace => workspace !== currentWorkspace)
+                      .map((workspace) => (
+                        <DropdownMenuItem
+                          key={workspace}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (filePath) {
+                              onMoveTo?.(filePath, workspace)
+                            }
+                          }}
+                        >
+                          {workspace}
+                        </DropdownMenuItem>
+                      ))}
+                    {allWorkspaces.filter(workspace => workspace !== currentWorkspace).length === 0 && (
+                      <DropdownMenuItem disabled>No other workspaces</DropdownMenuItem>
+                    )}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
               <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

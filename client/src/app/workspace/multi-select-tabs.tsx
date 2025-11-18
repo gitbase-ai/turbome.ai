@@ -56,6 +56,7 @@ export function MultiSelectTabs({
     addWorkspace,
     deleteWorkspace,
     renameFile,
+    moveFile,
   } = useWorkspaceStore()
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -227,15 +228,58 @@ export function MultiSelectTabs({
         console.log(`File renamed successfully from ${oldPath} to ${newPath}`)
 
         // Update Zustand store (automatically persisted)
+        // This will update the file path in tabs and openAccordions
         renameFile(oldPath, newPath)
-
-        alert(`Successfully renamed to ${newPath}`)
       } else {
         throw new Error(response.message || 'Failed to rename file')
       }
     } catch (error) {
       console.error('Error renaming file:', error)
+      // Keep alert for errors only
       alert(`Failed to rename file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const handleMoveTo = async (filePath: string, targetWorkspace: string) => {
+    try {
+      // Get current repo
+      const currentRepo = await V2RepoService.getCurrentRepo()
+
+      // Parse repo URL (format: domain/owner/repo)
+      const urlParts = currentRepo.url.split('/')
+      if (urlParts.length !== 3) {
+        throw new Error('Invalid repo URL format')
+      }
+
+      const [domain, owner, repo] = urlParts
+
+      // Call V2 API to update workspace frontmatter
+      const { V2ContentService } = await import("@/services/V2ContentService")
+
+      // TODO: Replace hardcoded test values with real user info
+      await V2ContentService.updateFrontmatter(
+        domain,
+        owner,
+        repo,
+        filePath,
+        {
+          frontmatterUpdates: { workspace: targetWorkspace },
+          commitMessage: {
+            authorName: 'testname',
+            authorEmail: 'testmail@a.com',
+            message: `Move ${filePath} to workspace ${targetWorkspace}`
+          }
+        }
+      )
+
+      console.log(`File ${filePath} moved to workspace ${targetWorkspace} successfully`)
+
+      // Update Zustand store to move file between workspaces
+      // This provides instant visual feedback without page reload
+      moveFile(filePath, targetWorkspace)
+    } catch (error) {
+      console.error('Error moving file:', error)
+      alert(`Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -335,6 +379,7 @@ export function MultiSelectTabs({
                           onArchive={() => handleArchive(file.path)}
                           isArchiving={archivingFiles.has(file.path)}
                           onRename={handleRename}
+                          onMoveTo={handleMoveTo}
                           filePath={file.path}
                         >
                           {file.filename}

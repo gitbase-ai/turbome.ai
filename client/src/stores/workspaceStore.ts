@@ -47,6 +47,7 @@ interface WorkspaceState {
   deleteWorkspace: (workspaceId: string) => void
 
   renameFile: (oldPath: string, newPath: string) => void
+  moveFile: (filePath: string, targetWorkspace: string) => void
 
   // Save actions
   markFileDirty: (filePath: string) => void
@@ -345,6 +346,52 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           tabs: newTabs,
           openAccordions: newOpenAccordions,
         })
+      },
+
+      moveFile: (filePath, targetWorkspace) => {
+        const { tabs } = get()
+
+        // Find the file in current tabs
+        let fileToMove: V2Workspace.V2WorkspaceFile | null = null
+        let sourceWorkspace: string | null = null
+
+        for (const tab of tabs) {
+          const file = tab.files?.find(f => f.path === filePath)
+          if (file) {
+            fileToMove = file
+            sourceWorkspace = tab.id
+            break
+          }
+        }
+
+        if (!fileToMove || !sourceWorkspace) {
+          console.error(`File ${filePath} not found in any workspace`)
+          return
+        }
+
+        // Update tabs: remove from source, add to target
+        const newTabs = tabs.map(tab => {
+          if (tab.id === sourceWorkspace) {
+            // Remove file from source workspace
+            const newFiles = tab.files?.filter(f => f.path !== filePath) || []
+            return {
+              ...tab,
+              files: newFiles,
+              count: newFiles.length,
+            }
+          } else if (tab.id === targetWorkspace) {
+            // Add file to target workspace
+            const newFiles = [...(tab.files || []), fileToMove]
+            return {
+              ...tab,
+              files: newFiles,
+              count: newFiles.length,
+            }
+          }
+          return tab
+        })
+
+        set({ tabs: newTabs })
       },
 
       // Save actions

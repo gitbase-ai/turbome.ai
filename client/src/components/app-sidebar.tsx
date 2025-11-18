@@ -4,7 +4,6 @@ import * as React from "react"
 import {
   FileText,
   Code,
-  FolderTree,
   LayoutDashboard,
 } from "lucide-react"
 
@@ -40,25 +39,6 @@ const data = {
       url: "/workspace",
       icon: LayoutDashboard,
       isActive: true,
-    },
-    {
-      title: "Explore",
-      url: "/explore",
-      icon: FolderTree,
-      // items: [
-      //   {
-      //     title: "All Files",
-      //     url: "/explore",
-      //   },
-      //   {
-      //     title: "Recent",
-      //     url: "/explore?filter=recent",
-      //   },
-      //   {
-      //     title: "Favorites",
-      //     url: "/explore?filter=favorites",
-      //   },
-      // ],
     },
     {
       title: "API",

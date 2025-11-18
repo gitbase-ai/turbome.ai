@@ -96,19 +96,21 @@ title: 我的文档
 
 TurboMe 提供全面的 RESTful API：
 
-### V1 端点
+### V2 端点
 
-- `GET /api/v1/workspaces` - 列出所有工作空间
-- `GET /api/v1/files/markdown` - 获取 markdown 文件
-- `PUT /api/v1/files/markdown` - 保存 markdown 文件
-- `PUT /api/v1/files/markdown/frontmatter` - 更新 frontmatter
-- `DELETE /api/v1/files/markdown/frontmatter` - 删除 frontmatter 字段
+- `GET /api/v2/repos/:domain/:owner/:repo/workspaces` - 列出所有工作空间
+- `GET /api/v2/repos/:domain/:owner/:repo/content/:path*` - 获取文件内容
+- `PUT /api/v2/repos/:domain/:owner/:repo/content/:path*` - 保存文件内容
+- `PUT /api/v2/repos/:domain/:owner/:repo/content/:path*/frontmatter` - 更新 frontmatter
+- `DELETE /api/v2/repos/:domain/:owner/:repo/content/:path*/frontmatter` - 删除 frontmatter
+- `GET /api/v2/repos/:domain/:owner/:repo/search` - 搜索文件
+- `POST /api/v2/repos/:domain/:owner/:repo/trees` - 重命名文件
 
 ### 示例
 
 ```javascript
 // 获取所有工作空间
-fetch('http://localhost:7788/api/v1/workspaces')
+fetch('http://localhost:7788/api/v2/repos/github.com/owner/repo/workspaces')
   .then(res => res.json())
   .then(data => console.log(data));
 ```
@@ -296,47 +298,6 @@ CLIENT_URL=http://localhost:3000
 PORT=7788          # 服务器端口（默认：7788）
 NODE_ENV=production # CLI 自动设置
 ```
-
-## 共享类型和 API 客户端
-
-项目包含共享的 TypeScript 类型和即用型 API 客户端，用于类型安全的前后端通信。
-
-### 在前端中使用
-
-```typescript
-import { FilesApiClient, GetFilesResponse } from '@shared/index';
-
-// 创建 API 客户端
-const filesApi = new FilesApiClient('/api');
-
-// 类型安全的 API 调用
-const response: GetFilesResponse = await filesApi.getFile('test.txt');
-const multipleFiles = await filesApi.getFiles({
-  file_paths: ['file1.txt', 'file2.txt'],
-  encoding: 'text'
-});
-
-// 保存文件，完全类型安全
-await filesApi.saveFile({
-  file_path: 'new-file.txt',
-  content: 'Hello World',
-  commit_message: '创建新文件'
-});
-```
-
-### 共享类型包括
-
-- **请求/响应类型**: `GetFilesRequest`, `SaveFileRequest` 等
-- **数据模型**: `FileInfo`, `MultipleFilesResponse` 等
-- **API 客户端**: 包含所有方法的 `FilesApiClient`
-- **通用类型**: `ApiResponse`, `User` 等
-
-### 优势
-
-- ✅ **类型安全**: IntelliSense 和编译时检查
-- ✅ **一致性**: 前后端使用相同的类型
-- ✅ **开发体验**: 更好的自动补全
-- ✅ **可维护性**: API 契约的单一真实来源
 
 ## 文件存储
 

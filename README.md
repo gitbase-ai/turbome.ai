@@ -102,19 +102,21 @@ Archive files by removing them from workspaces:
 
 TurboMe provides a comprehensive RESTful API:
 
-### V1 Endpoints
+### V2 Endpoints
 
-- `GET /api/v1/workspaces` - List all workspaces
-- `GET /api/v1/files/markdown` - Get markdown files
-- `PUT /api/v1/files/markdown` - Save markdown files
-- `PUT /api/v1/files/markdown/frontmatter` - Update frontmatter
-- `DELETE /api/v1/files/markdown/frontmatter` - Delete frontmatter fields
+- `GET /api/v2/repos/:domain/:owner/:repo/workspaces` - List all workspaces
+- `GET /api/v2/repos/:domain/:owner/:repo/content/:path*` - Get file content
+- `PUT /api/v2/repos/:domain/:owner/:repo/content/:path*` - Save file content
+- `PUT /api/v2/repos/:domain/:owner/:repo/content/:path*/frontmatter` - Update frontmatter
+- `DELETE /api/v2/repos/:domain/:owner/:repo/content/:path*/frontmatter` - Delete frontmatter
+- `GET /api/v2/repos/:domain/:owner/:repo/search` - Search files
+- `POST /api/v2/repos/:domain/:owner/:repo/trees` - Rename files
 
 ### Example
 
 ```javascript
 // Get all workspaces
-fetch('http://localhost:7788/api/v1/workspaces')
+fetch('http://localhost:7788/api/v2/repos/github.com/owner/repo/workspaces')
   .then(res => res.json())
   .then(data => console.log(data));
 ```

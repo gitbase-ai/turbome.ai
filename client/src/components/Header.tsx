@@ -233,11 +233,6 @@ export default function Header() {
                   </CollapsibleContent>
                 </Collapsible>
 
-                <Link href="/explore" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="ghost" className="w-full justify-start">
-                    Explore
-                  </Button>
-                </Link>
                 <Link href="/conversation" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="ghost" className="w-full justify-start">
                     Conversation
@@ -291,9 +286,6 @@ export default function Header() {
             </PopoverContent>
           </Popover>
 
-          <Link href="/explore">
-            <Button variant="ghost">Explore</Button>
-          </Link>
           <Link href="/conversation">
             <Button variant="ghost">Conversation</Button>
           </Link>

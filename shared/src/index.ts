@@ -1,9 +1,7 @@
 export * from './types/common';
 export * from './types/files';
 export * from './types/git';
-export * from './types/search';
 export * as V1Git from './types/v1/git';
-export * as V1Search from './types/v1/search';
 export * as V2Repo from './types/v2/repo';
 export * as V2Workspace from './types/v2/workspace';
 export * as V2Content from './types/v2/content';

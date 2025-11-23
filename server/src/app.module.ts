@@ -3,10 +3,6 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UsersModule } from './modules/users/users.module';
-import { CommitsModule } from './modules/commits/commits.module';
-import { GitModule } from './modules/git/git.module';
-import { V1GitModule } from './modules/v1/git/git.module';
 import { V2RepoModule } from './modules/v2/repos/repos.module';
 import { V2WorkspaceModule } from './modules/v2/workspace/workspace.module';
 import { V2ContentModule } from './modules/v2/content/content.module';
@@ -17,10 +13,6 @@ const isProd = process.env.NODE_ENV === 'production';
 
 @Module({
   imports: [
-    UsersModule,
-    CommitsModule,
-    GitModule,
-    V1GitModule,
     V2WorkspaceModule,
     V2ContentModule,
     V2RepoModule,

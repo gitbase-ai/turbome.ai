@@ -282,7 +282,7 @@ export function Landing() {
           <div className="max-w-3xl mx-auto text-center space-y-4 mb-16">
             <h2 className="text-3xl md:text-4xl font-bold">与传统工具的区别</h2>
             <p className="text-lg text-muted-foreground">
-              专为开发者和内容创作者优化的现代化解决方案
+              专为思考者优化的AI时代解决方案
             </p>
           </div>
 
@@ -432,7 +432,7 @@ export function Landing() {
           <div className="max-w-3xl mx-auto text-center space-y-4 mb-16">
             <h2 className="text-3xl md:text-4xl font-bold">典型工作流程</h2>
             <p className="text-lg text-muted-foreground">
-              六步开始您的智能文档管理之旅
+              六步开始您的知识管理之旅
             </p>
           </div>
 
@@ -475,12 +475,12 @@ export function Landing() {
                   <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
                     3
                   </div>
-                  <CardTitle>编辑</CardTitle>
+                  <CardTitle>搜索</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  点击文件打开 Milkdown 编辑器，所见即所得编辑，自动保存并提交到 Git
+                  顶部搜索框输入关键词，快速找到相关文档，支持文件名和内容搜索
                 </CardDescription>
               </CardContent>
             </Card>
@@ -491,12 +491,12 @@ export function Landing() {
                   <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
                     4
                   </div>
-                  <CardTitle>搜索</CardTitle>
+                  <CardTitle>编辑</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  顶部搜索框输入关键词，快速找到相关文档，支持文件名和内容搜索
+                  点击文件打开 Milkdown 编辑器，所见即所得编辑，自动保存并提交到 Git
                 </CardDescription>
               </CardContent>
             </Card>
@@ -532,33 +532,6 @@ export function Landing() {
                 </CardDescription>
               </CardContent>
             </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center space-y-8">
-            <h2 className="text-3xl md:text-4xl font-bold">
-              开始使用 TurboMe
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              特别适合那些希望保留 Git 版本控制优势、同时需要现代化文档管理界面的开发者和内容创作者
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild>
-                <Link href="/workspace">
-                  立即开始
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="https://github.com/develop-loop/turbome.ai" target="_blank">
-                  查看源码
-                </Link>
-              </Button>
-            </div>
           </div>
         </div>
       </section>

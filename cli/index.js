@@ -3,8 +3,12 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { initializeConfig } = require('./init');
 
 function startServer() {
+  // Initialize config before starting server
+  initializeConfig();
+
   console.log('🚀 Starting TurboMe server...');
 
   // 设置生产环境

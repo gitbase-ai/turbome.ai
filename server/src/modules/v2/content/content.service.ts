@@ -439,4 +439,63 @@ export class V2ContentService {
       throw new Error(`Failed to create/update file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Delete file
+   * @param repoUrl - Repository URL
+   * @param filePath - File path relative to repository root
+   * @param options - Commit options
+   * @returns Result with deletion information
+   */
+  async deleteFile(
+    repoUrl: string,
+    filePath: string,
+    options: SaveMarkdownOptions
+  ): Promise<V2Content.V2DeleteFileResult> {
+    // Security check: prevent directory traversal
+    if (!this.isSafePath(filePath)) {
+      throw new Error('Invalid file path: contains invalid characters or attempts directory traversal');
+    }
+
+    // Get repository local path
+    const repoLocalPath = await this.getRepoLocalPath(repoUrl);
+    const fullPath = path.join(repoLocalPath, filePath);
+
+    try {
+      // Check if file exists
+      let fileStats;
+      try {
+        fileStats = await fs.stat(fullPath);
+      } catch (error) {
+        throw new Error(`File '${filePath}' does not exist`);
+      }
+
+      if (!fileStats.isFile()) {
+        throw new Error(`Path '${filePath}' is not a file`);
+      }
+
+      // Git operations
+      const gitUtil = new GitUtil(repoLocalPath);
+
+      // Remove file from git (this also deletes the file from filesystem and stages the deletion)
+      await gitUtil.removeFiles(filePath);
+
+      // Create commit with file-specific commit for atomicity
+      // The optimized commit method will use -- to commit only this specific deletion
+      await gitUtil.commit({
+        commitMessage: options.commitMessage,
+        authorName: options.authorName,
+        authorEmail: options.authorEmail,
+        filePath: filePath
+      });
+
+      return {
+        path: filePath,
+        deleted: true
+      };
+
+    } catch (error) {
+      throw new Error(`Failed to delete file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }

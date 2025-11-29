@@ -4,8 +4,8 @@
 
 // Git Commit Message
 export interface GitCommitMessage {
-  authorName: string;
-  authorEmail: string;
+  authorName?: string;
+  authorEmail?: string;
   message: string;
 }
 
@@ -81,5 +81,21 @@ export interface V2CreateOrUpdateFileResult {
 export interface V2CreateOrUpdateFileResponse {
   success: boolean;
   data?: V2CreateOrUpdateFileResult;
+  message?: string;
+}
+
+// Delete File Types
+export interface V2DeleteFileRequest {
+  commitMessage: GitCommitMessage;
+}
+
+export interface V2DeleteFileResult {
+  path: string;
+  deleted: boolean;
+}
+
+export interface V2DeleteFileResponse {
+  success: boolean;
+  data?: V2DeleteFileResult;
   message?: string;
 }

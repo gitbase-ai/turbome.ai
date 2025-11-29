@@ -64,6 +64,8 @@ function FileAccordionTrigger({
   children,
   onArchive,
   isArchiving,
+  onDelete,
+  isDeleting,
   onRename,
   onMoveTo,
   filePath,
@@ -71,6 +73,8 @@ function FileAccordionTrigger({
 }: React.ComponentProps<typeof AccordionPrimitive.Trigger> & {
   onArchive?: () => void
   isArchiving?: boolean
+  onDelete?: () => void
+  isDeleting?: boolean
   onRename?: (oldPath: string, newPath: string) => void
   onMoveTo?: (filePath: string, targetWorkspace: string) => void
   filePath?: string
@@ -89,6 +93,7 @@ function FileAccordionTrigger({
   const allWorkspaces = getWorkspaceNames()
   const currentWorkspace = getFileWorkspace(filePath || '')
   const [archivePopoverOpen, setArchivePopoverOpen] = React.useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false)
   const [newPath, setNewPath] = React.useState("")
   const [pathSuggestions, setPathSuggestions] = React.useState<string[]>([])
@@ -298,7 +303,6 @@ function FileAccordionTrigger({
               >
                 Rename
               </DropdownMenuItem>
-              <DropdownMenuItem>Duplicate</DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>Move to</DropdownMenuSubTrigger>
                 <DropdownMenuPortal>
@@ -324,11 +328,65 @@ function FileAccordionTrigger({
                   </DropdownMenuSubContent>
                 </DropdownMenuPortal>
               </DropdownMenuSub>
-              <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteDialogOpen(true)
+                }}
+              >
+                Delete
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              Delete File
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              Are you sure you want to delete this file? This will permanently delete the file from the repository. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                onDelete?.()
+              }}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 818-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
@@ -546,7 +604,6 @@ function FileAccordionContent({
         const currentContent = editorRef.current.getContent()
 
         // Call create/update API
-        // TODO: Replace hardcoded test values with real user info
         const response = await V2ContentService.createOrUpdateFile(
           domain,
           owner,
@@ -556,8 +613,6 @@ function FileAccordionContent({
             content: currentContent,
             frontmatter: frontmatter,
             commitMessage: {
-              authorName: 'testname',
-              authorEmail: 'testmail@a.com',
               message: `Update ${filePath}`
             }
           }

@@ -126,4 +126,39 @@ export class V2ContentService {
 
     return await response.json();
   }
+
+  /**
+   * Delete file
+   * @param domain - Git hosting domain (e.g., github.com)
+   * @param owner - Repository owner
+   * @param repo - Repository name
+   * @param path - File path within repository
+   * @param request - Delete request data
+   * @returns Delete response
+   */
+  static async deleteFile(
+    domain: string,
+    owner: string,
+    repo: string,
+    path: string,
+    request: {
+      commitMessage: V2Content.GitCommitMessage;
+    }
+  ): Promise<V2Content.V2DeleteFileResponse> {
+    const url = `${this.BASE_URL}/repos/${domain}/${owner}/${repo}/contents/${path}`;
+
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete file');
+    }
+
+    return await response.json();
+  }
 }

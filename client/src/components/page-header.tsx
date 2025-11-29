@@ -144,12 +144,9 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
       if (urlParts.length === 3) {
         const [domain, owner, repo] = urlParts
 
-        // TODO: Replace hardcoded test values with real user info
         await V2ContentService.updateFrontmatter(domain, owner, repo, filePath, {
           frontmatterUpdates: { workspace: workspaceName },
           commitMessage: {
-            authorName: 'testname',
-            authorEmail: 'testmail@a.com',
             message: `Add ${filePath} to workspace ${workspaceName}`
           }
         })

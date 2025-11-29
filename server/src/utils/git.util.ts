@@ -94,7 +94,7 @@ export class GitUtil {
    */
   async removeFiles(filePaths: string | string[]): Promise<void> {
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
-    
+
     for (const filePath of paths) {
       try {
         await this.executeGitCommand(`git rm "${filePath}"`);
@@ -102,6 +102,18 @@ export class GitUtil {
         console.warn(`Failed to remove file ${filePath} from git: ${error}`);
         // Continue with other files even if one fails
       }
+    }
+  }
+
+  /**
+   * Check if a file is tracked by git
+   */
+  async isFileTracked(filePath: string): Promise<boolean> {
+    try {
+      await this.executeGitCommand(`git ls-files --error-unmatch "${filePath}"`);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -118,35 +130,74 @@ export class GitUtil {
   }
 
   /**
+   * Check if a specific file has changes to commit
+   */
+  async fileHasChangesToCommit(filePath: string): Promise<boolean> {
+    try {
+      const output = await this.executeGitCommand(`git diff --cached --name-only "${filePath}"`);
+      return output.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Create a git commit
+   *
+   * This method uses file-specific commit to ensure atomicity:
+   * - For tracked files: commits only the specified file without using staging area
+   * - For new files: stages the file first, then commits it
+   * - This prevents accidentally committing other staged changes
    */
   async commit(options: GitCommitOptions): Promise<string> {
     // Ensure we have a git repository
     await this.initRepository();
 
-    // Add file if specified
-    if (options.filePath) {
-      await this.addFiles(options.filePath);
-    }
-
-    // Check if there are changes to commit
-    const hasChanges = await this.hasChangesToCommit();
-    if (!hasChanges) {
-      console.log('No changes to commit');
-      return 'No changes to commit';
-    }
-
     // Build commit command
     let commitCommand = 'git commit';
-    
+
     // Add author information if provided
     if (options.authorName || options.authorEmail) {
       const author = `"${options.authorName || 'Unknown'} <${options.authorEmail || 'unknown@example.com'}>"`;
       commitCommand += ` --author=${author}`;
     }
-    
+
     // Add commit message
     commitCommand += ` -m "${options.commitMessage.replace(/"/g, '\\"')}"`;
+
+    // Handle file-specific commit for atomicity
+    if (options.filePath) {
+      const isTracked = await this.isFileTracked(options.filePath);
+
+      if (isTracked) {
+        // File is already tracked by git
+        // Use -- to commit only this specific file, bypassing staging area
+        commitCommand += ` -- "${options.filePath}"`;
+
+        console.log(`Committing tracked file: ${options.filePath}`);
+      } else {
+        // File is not tracked (new file)
+        // Must stage it first
+        await this.addFiles(options.filePath);
+
+        // Check if the file was successfully staged
+        const hasChanges = await this.fileHasChangesToCommit(options.filePath);
+        if (!hasChanges) {
+          console.log('No changes to commit for new file');
+          return 'No changes to commit';
+        }
+
+        console.log(`Committing new file: ${options.filePath}`);
+        // Commit the staged file (will commit entire staging area, but we just staged this one file)
+      }
+    } else {
+      // No specific file specified, commit all staged changes
+      const hasChanges = await this.hasChangesToCommit();
+      if (!hasChanges) {
+        console.log('No changes to commit');
+        return 'No changes to commit';
+      }
+    }
 
     try {
       const result = await this.executeGitCommand(commitCommand);

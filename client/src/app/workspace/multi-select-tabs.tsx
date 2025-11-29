@@ -46,6 +46,7 @@ export function MultiSelectTabs({
     selectedTabs,
     openAccordions,
     archivingFiles,
+    deletingFiles,
     removingFiles,
     initializeWorkspace,
     toggleTab,
@@ -53,6 +54,9 @@ export function MultiSelectTabs({
     archiveFile,
     completeArchive,
     cancelArchive,
+    deleteFile,
+    completeDelete,
+    cancelDelete,
     addWorkspace,
     deleteWorkspace,
     renameFile,
@@ -129,7 +133,6 @@ export function MultiSelectTabs({
       // Call V2 API to delete workspace frontmatter
       const { V2ContentService } = await import("@/services/V2ContentService")
 
-      // TODO: Replace hardcoded test values with real user info
       await V2ContentService.deleteFrontmatter(
         domain,
         owner,
@@ -138,8 +141,6 @@ export function MultiSelectTabs({
         {
           frontmatterKeys: ['workspace'],
           commitMessage: {
-            authorName: 'testname',
-            authorEmail: 'testmail@a.com',
             message: `Archive ${filePath} by removing workspace`
           }
         }
@@ -155,6 +156,50 @@ export function MultiSelectTabs({
       console.error('Error archiving file:', error)
       alert(`Failed to archive file: ${error instanceof Error ? error.message : 'Unknown error'}`)
       cancelArchive(filePath)
+    }
+  }
+
+  const handleDelete = async (filePath: string) => {
+    // Start deleting animation
+    deleteFile(filePath)
+
+    try {
+      // Get current repo
+      const currentRepo = await V2RepoService.getCurrentRepo()
+
+      // Parse repo URL (format: domain/owner/repo)
+      const urlParts = currentRepo.url.split('/')
+      if (urlParts.length !== 3) {
+        throw new Error('Invalid repo URL format')
+      }
+
+      const [domain, owner, repo] = urlParts
+
+      // Call V2 API to delete file
+      const { V2ContentService } = await import("@/services/V2ContentService")
+
+      await V2ContentService.deleteFile(
+        domain,
+        owner,
+        repo,
+        filePath,
+        {
+          commitMessage: {
+            message: `Delete ${filePath}`
+          }
+        }
+      )
+
+      console.log(`File ${filePath} deleted successfully`)
+
+      // Wait for animation to complete before removing from state
+      setTimeout(() => {
+        completeDelete(filePath)
+      }, 300) // Match animation duration
+    } catch (error) {
+      console.error('Error deleting file:', error)
+      alert(`Failed to delete file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      cancelDelete(filePath)
     }
   }
 
@@ -256,7 +301,6 @@ export function MultiSelectTabs({
       // Call V2 API to update workspace frontmatter
       const { V2ContentService } = await import("@/services/V2ContentService")
 
-      // TODO: Replace hardcoded test values with real user info
       await V2ContentService.updateFrontmatter(
         domain,
         owner,
@@ -265,8 +309,6 @@ export function MultiSelectTabs({
         {
           frontmatterUpdates: { workspace: targetWorkspace },
           commitMessage: {
-            authorName: 'testname',
-            authorEmail: 'testmail@a.com',
             message: `Move ${filePath} to workspace ${targetWorkspace}`
           }
         }
@@ -378,6 +420,8 @@ export function MultiSelectTabs({
                         <FileAccordionTrigger
                           onArchive={() => handleArchive(file.path)}
                           isArchiving={archivingFiles.has(file.path)}
+                          onDelete={() => handleDelete(file.path)}
+                          isDeleting={deletingFiles.has(file.path)}
                           onRename={handleRename}
                           onMoveTo={handleMoveTo}
                           filePath={file.path}

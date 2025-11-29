@@ -16,6 +16,7 @@ interface WorkspaceState {
   selectedTabs: string[]
   openAccordions: string[]
   archivingFiles: Set<string>
+  deletingFiles: Set<string>
   removingFiles: Set<string>
 
   // Save states for each file
@@ -42,6 +43,10 @@ interface WorkspaceState {
   archiveFile: (filePath: string) => void
   completeArchive: (filePath: string) => void
   cancelArchive: (filePath: string) => void
+
+  deleteFile: (filePath: string) => void
+  completeDelete: (filePath: string) => void
+  cancelDelete: (filePath: string) => void
 
   addWorkspace: (workspaceId: string) => void
   deleteWorkspace: (workspaceId: string) => void
@@ -75,6 +80,7 @@ const initialState = {
   selectedTabs: [],
   openAccordions: [],
   archivingFiles: new Set<string>(),
+  deletingFiles: new Set<string>(),
   removingFiles: new Set<string>(),
   dirtyFiles: new Set<string>(),
   savingFiles: new Set<string>(),
@@ -150,6 +156,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           set({
             currentRepoUrl: repoUrl,
             archivingFiles: new Set<string>(),
+            deletingFiles: new Set<string>(),
             removingFiles: new Set<string>(),
             dirtyFiles: new Set<string>(),
             savingFiles: new Set<string>(),
@@ -291,6 +298,54 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const newArchivingFiles = new Set(archivingFiles)
         newArchivingFiles.delete(filePath)
         set({ archivingFiles: newArchivingFiles })
+      },
+
+      deleteFile: (filePath) => {
+        const { deletingFiles, removingFiles } = get()
+        set({
+          deletingFiles: new Set(deletingFiles).add(filePath),
+          removingFiles: new Set(removingFiles).add(filePath),
+        })
+      },
+
+      completeDelete: (filePath) => {
+        const { tabs, openAccordions, deletingFiles, removingFiles } = get()
+
+        // Remove file from tabs
+        const newTabs = tabs.map(tab => ({
+          ...tab,
+          files: tab.files?.filter(file => file.path !== filePath),
+          count: tab.files ? tab.files.filter(file => file.path !== filePath).length : 0,
+        }))
+
+        // Remove from open accordions
+        const newOpenAccordions = openAccordions.filter(path => path !== filePath)
+
+        // Clean up deleting and removing states
+        const newDeletingFiles = new Set(deletingFiles)
+        newDeletingFiles.delete(filePath)
+
+        const newRemovingFiles = new Set(removingFiles)
+        newRemovingFiles.delete(filePath)
+
+        set({
+          tabs: newTabs,
+          openAccordions: newOpenAccordions,
+          deletingFiles: newDeletingFiles,
+          removingFiles: newRemovingFiles,
+        })
+      },
+
+      cancelDelete: (filePath) => {
+        const { deletingFiles, removingFiles } = get()
+        const newDeletingFiles = new Set(deletingFiles)
+        newDeletingFiles.delete(filePath)
+        const newRemovingFiles = new Set(removingFiles)
+        newRemovingFiles.delete(filePath)
+        set({
+          deletingFiles: newDeletingFiles,
+          removingFiles: newRemovingFiles,
+        })
       },
 
       addWorkspace: (workspaceId) => {

@@ -93,16 +93,16 @@ export class V2ContentController {
         commitMessage: {
           type: 'object',
           description: 'Git commit information',
-          required: ['authorName', 'authorEmail', 'message'],
+          required: ['message'],
           properties: {
             authorName: {
               type: 'string',
-              description: 'Git commit author name',
+              description: 'Git commit author name (optional, uses git config if not provided)',
               example: 'John Doe'
             },
             authorEmail: {
               type: 'string',
-              description: 'Git commit author email',
+              description: 'Git commit author email (optional, uses git config if not provided)',
               example: 'john@example.com'
             },
             message: {
@@ -155,8 +155,8 @@ export class V2ContentController {
         throw new BadRequestException('commitMessage is required');
       }
 
-      if (!body.commitMessage.authorName || !body.commitMessage.authorEmail || !body.commitMessage.message) {
-        throw new BadRequestException('commitMessage must include authorName, authorEmail, and message');
+      if (!body.commitMessage.message) {
+        throw new BadRequestException('commitMessage must include message');
       }
 
       const result = await this.contentService.createOrUpdateFile(
@@ -213,16 +213,16 @@ export class V2ContentController {
         commitMessage: {
           type: 'object',
           description: 'Git commit information',
-          required: ['authorName', 'authorEmail', 'message'],
+          required: ['message'],
           properties: {
             authorName: {
               type: 'string',
-              description: 'Git commit author name',
+              description: 'Git commit author name (optional, uses git config if not provided)',
               example: 'John Doe'
             },
             authorEmail: {
               type: 'string',
-              description: 'Git commit author email',
+              description: 'Git commit author email (optional, uses git config if not provided)',
               example: 'john@example.com'
             },
             message: {
@@ -288,8 +288,8 @@ export class V2ContentController {
         throw new BadRequestException('commitMessage is required');
       }
 
-      if (!body.commitMessage.authorName || !body.commitMessage.authorEmail || !body.commitMessage.message) {
-        throw new BadRequestException('commitMessage must include authorName, authorEmail, and message');
+      if (!body.commitMessage.message) {
+        throw new BadRequestException('commitMessage must include message');
       }
 
       const result = await this.contentService.updateFrontmatter(
@@ -321,6 +321,110 @@ export class V2ContentController {
       }
 
       throw new InternalServerErrorException('Failed to update frontmatter');
+    }
+  }
+
+  @Delete(':domain/:owner/:repo/contents/:path(*)')
+  @ApiOperation({
+    summary: 'Delete file (V2)',
+    description: 'Delete a file from the repository and commit the change. V2 API uses repo URL in path.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['commitMessage'],
+      properties: {
+        commitMessage: {
+          type: 'object',
+          description: 'Git commit information',
+          required: ['message'],
+          properties: {
+            authorName: {
+              type: 'string',
+              description: 'Git commit author name (optional, uses git config if not provided)',
+              example: 'John Doe'
+            },
+            authorEmail: {
+              type: 'string',
+              description: 'Git commit author email (optional, uses git config if not provided)',
+              example: 'john@example.com'
+            },
+            message: {
+              type: 'string',
+              description: 'Git commit message',
+              example: 'Delete obsolete document'
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'File deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Path of deleted file' },
+            deleted: { type: 'boolean', description: 'Always true for successful deletion' }
+          }
+        },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 404, description: 'Repository or file not found' })
+  async deleteFile(
+    @Param('domain') domain: string,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+    @Param('path') filePath: string,
+    @Body() body: V2Content.V2DeleteFileRequest
+  ): Promise<V2Content.V2DeleteFileResponse> {
+    try {
+      const repoUrl = `${domain}/${owner}/${repo}`;
+
+      if (!body.commitMessage) {
+        throw new BadRequestException('commitMessage is required');
+      }
+
+      if (!body.commitMessage.message) {
+        throw new BadRequestException('commitMessage must include message');
+      }
+
+      const result = await this.contentService.deleteFile(
+        repoUrl,
+        filePath,
+        {
+          commitMessage: body.commitMessage.message,
+          authorName: body.commitMessage.authorName,
+          authorEmail: body.commitMessage.authorEmail
+        }
+      );
+
+      return {
+        success: true,
+        data: result,
+        message: `Successfully deleted file ${filePath}`
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while deleting file';
+
+      if (errorMessage.includes('does not exist') || errorMessage.includes('not found')) {
+        throw new NotFoundException(errorMessage);
+      }
+
+      if (errorMessage.includes('Invalid')) {
+        throw new BadRequestException(errorMessage);
+      }
+
+      throw new InternalServerErrorException('Failed to delete file');
     }
   }
 
@@ -414,8 +518,8 @@ export class V2ContentController {
         throw new BadRequestException('commitMessage is required');
       }
 
-      if (!body.commitMessage.authorName || !body.commitMessage.authorEmail || !body.commitMessage.message) {
-        throw new BadRequestException('commitMessage must include authorName, authorEmail, and message');
+      if (!body.commitMessage.message) {
+        throw new BadRequestException('commitMessage must include message');
       }
 
       const result = await this.contentService.deleteFrontmatter(

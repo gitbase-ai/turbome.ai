@@ -44,6 +44,7 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
   // Get workspace data from Zustand store
   const getFileWorkspace = useWorkspaceStore(state => state.getFileWorkspace)
   const getWorkspaceNames = useWorkspaceStore(state => state.getWorkspaceNames)
+  const refreshWorkspaces = useWorkspaceStore(state => state.refreshWorkspaces)
   const workspaces = getWorkspaceNames()
 
   // Handle click outside to close search
@@ -151,10 +152,8 @@ export function PageHeader({ breadcrumbs = [], currentPage }: PageHeaderProps) {
           }
         })
 
-        // Dispatch custom event to notify workspace page to refresh
-        window.dispatchEvent(new CustomEvent('workspace-file-added', {
-          detail: { workspaceName, filePath, repoUrl: currentRepo.url }
-        }))
+        // Refresh workspaces from server to get updated data
+        await refreshWorkspaces()
 
         // Update local state to show the badge immediately
         setFileWorkspaceMap(prev => ({

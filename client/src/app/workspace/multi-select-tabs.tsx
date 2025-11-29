@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { FilePathSelector } from "@/components/FilePathSelector"
 import { V2Workspace } from "@shared/index"
 import { V2RepoService } from "@/services/V2RepoService"
 import { V2TreeService } from "@/services/V2TreeService"
@@ -48,6 +49,7 @@ export function MultiSelectTabs({
     archivingFiles,
     deletingFiles,
     removingFiles,
+    dirtyFiles,
     initializeWorkspace,
     toggleTab,
     setOpenAccordions,
@@ -61,11 +63,21 @@ export function MultiSelectTabs({
     deleteWorkspace,
     renameFile,
     moveFile,
+    getUnsavedFilesByWorkspace,
+    removeUnsavedFile,
   } = useWorkspaceStore()
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState("")
   const [addError, setAddError] = useState<string | null>(null)
+
+  // New file dialog state
+  const [isNewFileDialogOpen, setIsNewFileDialogOpen] = useState(false)
+  const [newFileWorkspace, setNewFileWorkspace] = useState<string>("")
+  const [newFilePath, setNewFilePath] = useState("")
+  const [newFileError, setNewFileError] = useState<string | null>(null)
+  const [isNewFilePathValid, setIsNewFilePathValid] = useState(false)
+  const [newFileValidationError, setNewFileValidationError] = useState<string | undefined>(undefined)
 
   // Store previous workspaces for deep comparison
   const prevWorkspacesRef = useRef<V2Workspace.V2WorkspaceGroup[]>([])
@@ -248,6 +260,40 @@ export function MultiSelectTabs({
     console.log(`Workspace "${workspaceId}" deleted successfully`)
   }
 
+  const handleAddNewFile = () => {
+    // Validation is handled by FilePathSelector
+    if (!isNewFilePathValid) {
+      return
+    }
+
+    const filePath = newFilePath.trim()
+
+    // Extract filename from path
+    const filename = filePath.split('/').pop() || filePath
+
+    // Create unsaved file object
+    const { addUnsavedFile } = useWorkspaceStore.getState()
+    const unsavedFile = {
+      path: filePath,
+      filename: filename,
+      content: '',
+      frontmatter: { workspace: newFileWorkspace },
+      workspace: newFileWorkspace,
+      createdAt: Date.now(),
+    }
+
+    addUnsavedFile(newFileWorkspace, unsavedFile)
+
+    // Close dialog and reset form
+    setIsNewFileDialogOpen(false)
+    setNewFilePath("")
+    setNewFileError(null)
+    setIsNewFilePathValid(false)
+    setNewFileValidationError(undefined)
+
+    console.log(`Unsaved file "${filePath}" created in workspace "${newFileWorkspace}"`)
+  }
+
 
   const handleRename = async (oldPath: string, newPath: string) => {
     try {
@@ -325,6 +371,12 @@ export function MultiSelectTabs({
     }
   }
 
+  const handleDeleteUnsaved = (filePath: string) => {
+    // Delete unsaved file from localStorage without confirmation
+    removeUnsavedFile(filePath)
+    console.log(`Unsaved file "${filePath}" deleted from localStorage`)
+  }
+
   return (
     <div className="space-y-4">
       {/* Multi-select Tabs with Add Workspace Button */}
@@ -375,7 +427,15 @@ export function MultiSelectTabs({
       >
         {selectedTabs.map((tabId) => {
           const tab = tabs.find((t) => t.id === tabId)
-          const isEmpty = !tab?.files || tab.files.length === 0
+          const unsavedFiles = getUnsavedFilesByWorkspace(tabId)
+          const savedFiles = tab?.files || []
+          const allFiles = [...unsavedFiles.map(f => ({ ...f, isUnsaved: true })), ...savedFiles.map(f => ({ ...f, isUnsaved: false }))]
+          const isEmpty = allFiles.length === 0
+
+          // Calculate total unsaved count: new files + modified saved files
+          const modifiedSavedFilesCount = savedFiles.filter(f => dirtyFiles.has(f.path)).length
+          const totalUnsavedCount = unsavedFiles.length + modifiedSavedFilesCount
+
           return (
             <div
               key={tabId}
@@ -384,22 +444,33 @@ export function MultiSelectTabs({
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">
                   {tab?.label}
-                  {tab?.count !== undefined && (
-                    <span className="ml-2 text-sm text-muted-foreground">
-                      ({tab.count} files)
-                    </span>
-                  )}
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    ({savedFiles.length} saved{totalUnsavedCount > 0 && `, ${totalUnsavedCount} unsaved`})
+                  </span>
                 </h3>
-                {isEmpty && (
+                <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDeleteWorkspace(tabId)}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setNewFileWorkspace(tabId)
+                      setIsNewFileDialogOpen(true)
+                    }}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Plus className="h-4 w-4" />
                   </Button>
-                )}
+                  {isEmpty && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDeleteWorkspace(tabId)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
               <FileAccordion
                 type="multiple"
@@ -407,8 +478,8 @@ export function MultiSelectTabs({
                 value={openAccordions}
                 onValueChange={setOpenAccordions}
               >
-                {tab?.files && tab.files.length > 0 ? (
-                  tab.files.map((file, i) => (
+                {allFiles.length > 0 ? (
+                  allFiles.map((file, i) => (
                     <div
                       key={`${file.path}-${i}`}
                       className={cn(
@@ -418,19 +489,22 @@ export function MultiSelectTabs({
                     >
                       <FileAccordionItem value={file.path} className="border-b-0">
                         <FileAccordionTrigger
-                          onArchive={() => handleArchive(file.path)}
+                          onArchive={!file.isUnsaved ? () => handleArchive(file.path) : undefined}
                           isArchiving={archivingFiles.has(file.path)}
-                          onDelete={() => handleDelete(file.path)}
+                          onDelete={!file.isUnsaved ? () => handleDelete(file.path) : undefined}
                           isDeleting={deletingFiles.has(file.path)}
-                          onRename={handleRename}
-                          onMoveTo={handleMoveTo}
+                          onRename={!file.isUnsaved ? handleRename : undefined}
+                          onMoveTo={!file.isUnsaved ? handleMoveTo : undefined}
+                          onDeleteUnsaved={file.isUnsaved ? handleDeleteUnsaved : undefined}
                           filePath={file.path}
+                          isUnsaved={file.isUnsaved}
                         >
                           {file.filename}
                         </FileAccordionTrigger>
                         <FileAccordionContent
                           filePath={file.path}
                           repoUrl={repoUrl}
+                          isUnsaved={file.isUnsaved}
                         />
 
                       </FileAccordionItem>
@@ -482,6 +556,49 @@ export function MultiSelectTabs({
               Cancel
             </Button>
             <Button onClick={handleAddWorkspace}>Create Workspace</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add New File Dialog */}
+      <Dialog open={isNewFileDialogOpen} onOpenChange={setIsNewFileDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Create New File</DialogTitle>
+            <DialogDescription>
+              Create a new file in workspace &quot;{newFileWorkspace}&quot;. The file will be saved to localStorage until you click Save.
+            </DialogDescription>
+          </DialogHeader>
+          <FilePathSelector
+            value={newFilePath}
+            onValueChange={setNewFilePath}
+            placeholder="Enter file path (e.g., folder/myfile.md)..."
+            loadRootOnMount={true}
+            allowedExtensions={['.md']}
+            onValidationChange={(isValid, error) => {
+              setIsNewFilePathValid(isValid)
+              setNewFileValidationError(error)
+            }}
+          />
+          {!newFileValidationError && (
+            <p className="text-xs text-muted-foreground px-1">
+              You can browse directories or type a path. File must end with .md extension.
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsNewFileDialogOpen(false)
+                setNewFilePath("")
+                setNewFileError(null)
+                setIsNewFilePathValid(false)
+                setNewFileValidationError(undefined)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddNewFile} disabled={!isNewFilePathValid}>Create File</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

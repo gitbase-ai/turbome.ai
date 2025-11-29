@@ -6,6 +6,7 @@ import { ChevronRight, Archive, MoreHorizontal, Save } from "lucide-react"
 import { useWorkspaceStore } from "@/stores/workspaceStore"
 import { cn } from "@/lib/utils"
 import MilkdownEditor, { MilkdownEditorRef } from "@/components/MilkdownEditor"
+import { FilePathSelector } from "@/components/FilePathSelector"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,14 +30,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -68,7 +61,9 @@ function FileAccordionTrigger({
   isDeleting,
   onRename,
   onMoveTo,
+  onDeleteUnsaved,
   filePath,
+  isUnsaved,
   ...props
 }: React.ComponentProps<typeof AccordionPrimitive.Trigger> & {
   onArchive?: () => void
@@ -77,7 +72,9 @@ function FileAccordionTrigger({
   isDeleting?: boolean
   onRename?: (oldPath: string, newPath: string) => void
   onMoveTo?: (filePath: string, targetWorkspace: string) => void
+  onDeleteUnsaved?: (filePath: string) => void
   filePath?: string
+  isUnsaved?: boolean
 }) {
   // Get save states from Zustand store
   const isDirty = useWorkspaceStore(state => state.dirtyFiles.has(filePath || ''))
@@ -96,66 +93,13 @@ function FileAccordionTrigger({
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false)
   const [newPath, setNewPath] = React.useState("")
-  const [pathSuggestions, setPathSuggestions] = React.useState<string[]>([])
 
   // Initialize newPath when dialog opens
   React.useEffect(() => {
     if (renameDialogOpen && filePath) {
       setNewPath(filePath)
-      // Load initial suggestions based on current input
-      loadPathSuggestions(filePath)
     }
   }, [renameDialogOpen, filePath])
-
-  // Handle path input change and load suggestions
-  const handlePathChange = (value: string) => {
-    setNewPath(value)
-    // Directly load suggestions based on user input
-    loadPathSuggestions(value)
-  }
-
-  // Handle directory selection from suggestions
-  const handleSelectDirectory = (dirPath: string) => {
-    // Directly use the selected directory path
-    setNewPath(dirPath)
-    // Load suggestions for the selected directory
-    loadPathSuggestions(dirPath)
-  }
-
-  // Load path suggestions from tree API
-  const loadPathSuggestions = async (inputPath: string) => {
-    try {
-      const { V2RepoService } = await import("@/services/V2RepoService")
-      const { V2TreeService } = await import("@/services/V2TreeService")
-
-      const currentRepo = await V2RepoService.getCurrentRepo()
-      const urlParts = currentRepo.url.split('/')
-
-      if (urlParts.length === 3) {
-        const [domain, owner, repo] = urlParts
-
-        // Normalize path: remove leading slash if present
-        const normalizedPath = inputPath.startsWith('/') ? inputPath.substring(1) : inputPath
-
-        // Call API with the exact path user typed
-        const response = await V2TreeService.getTree(domain, owner, repo, normalizedPath, false)
-
-        if (response.success && response.data) {
-          // Extract directory entries and create path suggestions
-          const suggestions = response.data.entries
-            .filter(entry => entry.type === 'directory')
-            .map(entry => entry.path)
-
-          setPathSuggestions(suggestions)
-        } else {
-          setPathSuggestions([])
-        }
-      }
-    } catch (error) {
-      console.error('Error loading path suggestions:', error)
-      setPathSuggestions([])
-    }
-  }
 
   const handleRename = () => {
     if (filePath && newPath && filePath !== newPath) {
@@ -183,12 +127,11 @@ function FileAccordionTrigger({
         {/* 文件标题 */}
         <div className="flex-1 py-4 text-left text-sm font-medium flex items-center gap-2">
           {children}
-          {/* Dirty indicator dot */}
-          {isDirty && (
-            <span
-              className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60"
-              title="Unsaved changes"
-            />
+          {/* Unsaved badge for both unsaved files and dirty files */}
+          {(isUnsaved || isDirty) && (
+            <Badge variant="secondary" className="text-xs">
+              Unsaved
+            </Badge>
           )}
         </div>
 
@@ -226,28 +169,29 @@ function FileAccordionTrigger({
             </button>
           )}
 
-          {/* Archive 按钮 with Popover confirmation */}
-          <Popover open={archivePopoverOpen} onOpenChange={setArchivePopoverOpen}>
-            <PopoverTrigger asChild>
-              <button
-                onClick={(e) => e.stopPropagation()}
-                disabled={isArchiving}
-                className={cn(
-                  "focus-visible:border-ring focus-visible:ring-ring/50 flex items-center justify-center rounded-md p-2 transition-all outline-none hover:bg-muted focus-visible:ring-[3px]",
-                  isArchiving && "cursor-not-allowed opacity-50"
-                )}
-                title={isArchiving ? "Archiving..." : "Archive"}
-              >
-                {isArchiving ? (
-                  <svg className="animate-spin size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 818-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <Archive className="text-muted-foreground size-4" />
-                )}
-              </button>
-            </PopoverTrigger>
+          {/* Archive 按钮 with Popover confirmation - hidden for unsaved files */}
+          {!isUnsaved && onArchive && (
+            <Popover open={archivePopoverOpen} onOpenChange={setArchivePopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  disabled={isArchiving}
+                  className={cn(
+                    "focus-visible:border-ring focus-visible:ring-ring/50 flex items-center justify-center rounded-md p-2 transition-all outline-none hover:bg-muted focus-visible:ring-[3px]",
+                    isArchiving && "cursor-not-allowed opacity-50"
+                  )}
+                  title={isArchiving ? "Archiving..." : "Archive"}
+                >
+                  {isArchiving ? (
+                    <svg className="animate-spin size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 818-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <Archive className="text-muted-foreground size-4" />
+                  )}
+                </button>
+              </PopoverTrigger>
             <PopoverContent align="end" className="w-80">
               <div className="space-y-3">
                 <div className="space-y-1">
@@ -282,8 +226,10 @@ function FileAccordionTrigger({
               </div>
             </PopoverContent>
           </Popover>
+          )}
 
-          {/* 更多操作下拉菜单 */}
+          {/* 更多操作下拉菜单 - for saved files */}
+          {!isUnsaved && (onRename || onMoveTo || onDelete) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -339,6 +285,35 @@ function FileAccordionTrigger({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
+
+          {/* 更多操作下拉菜单 - for unsaved files (only delete) */}
+          {isUnsaved && onDeleteUnsaved && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="focus-visible:border-ring focus-visible:ring-ring/50 flex items-center justify-center rounded-md p-2 transition-all outline-none hover:bg-muted focus-visible:ring-[3px]"
+                title="More options"
+              >
+                <MoreHorizontal className="text-muted-foreground size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (filePath) {
+                    onDeleteUnsaved(filePath)
+                  }
+                }}
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -397,60 +372,14 @@ function FileAccordionTrigger({
               Enter the new path for this file. You can change the filename or move it to a different directory.
             </DialogDescription>
           </DialogHeader>
-          <Command className="rounded-lg border" shouldFilter={false}>
-            <CommandInput
-              placeholder="Enter new path..."
-              value={newPath}
-              onValueChange={handlePathChange}
-            />
-            <CommandList>
-              {pathSuggestions.length === 0 ? (
-                // Only show suggested filename if current input doesn't contain .md
-                !newPath.includes('.md') ? (
-                  <div className="p-4 space-y-2">
-                    <p className="text-sm text-muted-foreground">Suggested filename:</p>
-                    <Badge
-                      variant="secondary"
-                      className="cursor-pointer hover:bg-accent"
-                      onClick={() => {
-                        // Get original filename
-                        const originalFilename = (filePath || '').split('/').pop() || ''
-                        // Combine current input with original filename
-                        const suggestedPath = newPath
-                          ? (newPath.endsWith('/') ? `${newPath}${originalFilename}` : `${newPath}/${originalFilename}`)
-                          : originalFilename
-                        setNewPath(suggestedPath)
-                      }}
-                    >
-                      {(() => {
-                        const originalFilename = (filePath || '').split('/').pop() || ''
-                        return newPath
-                          ? (newPath.endsWith('/') ? `${newPath}${originalFilename}` : `${newPath}/${originalFilename}`)
-                          : originalFilename
-                      })()}
-                    </Badge>
-                  </div>
-                ) : null
-              ) : (
-                <CommandGroup heading="Available Directories">
-                  {pathSuggestions.map((suggestion) => (
-                    <CommandItem
-                      key={suggestion}
-                      value={suggestion}
-                      onSelect={() => handleSelectDirectory(suggestion)}
-                    >
-                      <span className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                        </svg>
-                        {suggestion || '/ (root)'}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
+          <FilePathSelector
+            value={newPath}
+            onValueChange={setNewPath}
+            placeholder="Enter new path..."
+            suggestedFilename={(filePath || '').split('/').pop()}
+            showFilenameHint={true}
+            loadRootOnMount={false}
+          />
           <DialogFooter>
             <Button
               variant="outline"
@@ -504,6 +433,7 @@ const EnhancedTextEditor = ({
 interface FileAccordionContentProps extends React.ComponentProps<typeof AccordionPrimitive.Content> {
   filePath?: string
   repoUrl?: string
+  isUnsaved?: boolean
 }
 
 function FileAccordionContent({
@@ -511,6 +441,7 @@ function FileAccordionContent({
   children,
   filePath,
   repoUrl,
+  isUnsaved,
   ...props
 }: FileAccordionContentProps) {
   const [content, setContent] = React.useState<string | null>(null)
@@ -528,10 +459,29 @@ function FileAccordionContent({
   const cancelSave = useWorkspaceStore(state => state.cancelSave)
   const registerSaveHandler = useWorkspaceStore(state => state.registerSaveHandler)
   const unregisterSaveHandler = useWorkspaceStore(state => state.unregisterSaveHandler)
+  const getUnsavedFile = useWorkspaceStore(state => state.getUnsavedFile)
+  const updateUnsavedFile = useWorkspaceStore(state => state.updateUnsavedFile)
+  const refreshWorkspaces = useWorkspaceStore(state => state.refreshWorkspaces)
 
   React.useEffect(() => {
     const loadContent = async () => {
-      if (!filePath || !repoUrl) return
+      if (!filePath) return
+
+      // Handle unsaved files
+      if (isUnsaved) {
+        const unsavedFile = getUnsavedFile(filePath)
+        if (unsavedFile) {
+          setContent(unsavedFile.content)
+          setOriginalContent(unsavedFile.content)
+          setFrontmatter(unsavedFile.frontmatter)
+          const extension = filePath.split('.').pop() || 'text'
+          setFileType(extension)
+        }
+        return
+      }
+
+      // Handle saved files from server
+      if (!repoUrl) return
 
       setIsLoading(true)
       setError(null)
@@ -569,7 +519,7 @@ function FileAccordionContent({
     }
 
     loadContent()
-  }, [filePath, repoUrl])
+  }, [filePath, repoUrl, isUnsaved, getUnsavedFile])
 
   const setEditorRefCallback = React.useCallback((ref: MilkdownEditorRef | null) => {
     editorRef.current = ref
@@ -579,13 +529,21 @@ function FileAccordionContent({
   const handleEditorChange = React.useCallback(() => {
     if (!filePath) return
 
+    if (isUnsaved) {
+      // For unsaved files, update content in localStorage
+      if (editorRef.current) {
+        const currentContent = editorRef.current.getContent()
+        updateUnsavedFile(filePath, { content: currentContent })
+      }
+    }
+
     // Mark file as dirty when edited
     markFileDirty(filePath)
-  }, [filePath, markFileDirty])
+  }, [filePath, isUnsaved, markFileDirty, updateUnsavedFile])
 
   // Handle save
   const handleSave = React.useCallback(async () => {
-    if (!filePath || !repoUrl || !editorRef.current) return
+    if (!filePath || !editorRef.current) return
 
     startSaving(filePath)
     setError(null)
@@ -613,7 +571,7 @@ function FileAccordionContent({
             content: currentContent,
             frontmatter: frontmatter,
             commitMessage: {
-              message: `Update ${filePath}`
+              message: isUnsaved ? `Create ${filePath}` : `Update ${filePath}`
             }
           }
         )
@@ -623,6 +581,16 @@ function FileAccordionContent({
           setContent(currentContent)
           setOriginalContent(currentContent)
           completeSave(filePath)
+
+          // If this was an unsaved file, remove it from unsaved files
+          // The file will now appear as a normal saved file
+          if (isUnsaved) {
+            const { removeUnsavedFile } = useWorkspaceStore.getState()
+            removeUnsavedFile(filePath)
+
+            // Refresh workspaces from server to get the newly saved file
+            await refreshWorkspaces()
+          }
         } else {
           setError(response.message || 'Failed to save file')
           cancelSave(filePath)
@@ -633,7 +601,7 @@ function FileAccordionContent({
       setError(err instanceof Error ? err.message : 'Unknown error')
       cancelSave(filePath)
     }
-  }, [filePath, repoUrl, frontmatter, startSaving, completeSave, cancelSave])
+  }, [filePath, frontmatter, isUnsaved, startSaving, completeSave, cancelSave, updateUnsavedFile, refreshWorkspaces])
 
   // Register save handler in Zustand store
   React.useEffect(() => {

@@ -1,11 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { PageHeader } from "@/components/page-header"
 import { MultiSelectTabs } from "./multi-select-tabs"
-import { V2WorkspaceService } from "@/services/V2WorkspaceService"
 import { V2RepoService } from "@/services/V2RepoService"
-import { V2Workspace } from "@shared/index"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useWorkspaceStore } from "@/stores/workspaceStore"
 
@@ -42,82 +40,28 @@ function WorkspaceSkeleton() {
 }
 
 export default function Page() {
-  const [workspaces, setWorkspaces] = useState<V2Workspace.V2WorkspaceGroup[]>([])
-  const [repoUrl, setRepoUrl] = useState<string>('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Use Zustand store for all state
+  const serverWorkspaces = useWorkspaceStore(state => state.serverWorkspaces)
+  const isLoading = useWorkspaceStore(state => state.isLoadingWorkspaces)
+  const error = useWorkspaceStore(state => state.workspacesError)
+  const currentRepoUrl = useWorkspaceStore(state => state.currentRepoUrl)
+  const fetchWorkspaces = useWorkspaceStore(state => state.fetchWorkspaces)
 
   useEffect(() => {
-    const fetchWorkspaces = async () => {
+    const initializeWorkspaces = async () => {
       try {
-        setIsLoading(true)
-        setError(null)
-
         // Get current repo first
         const currentRepo = await V2RepoService.getCurrentRepo()
-        setRepoUrl(currentRepo.url)
 
-        // Parse repo URL (format: domain/owner/repo)
-        const urlParts = currentRepo.url.split('/')
-        if (urlParts.length !== 3) {
-          throw new Error('Invalid repo URL format')
-        }
-
-        const [domain, owner, repo] = urlParts
-
-        // Fetch workspaces for this repo
-        const response = await V2WorkspaceService.getWorkspacesByRepoUrl(
-          domain,
-          owner,
-          repo,
-          { limit: 100 }
-        )
-
-        if (response.success && response.data.workspaces) {
-          const apiWorkspaces = response.data.workspaces
-
-          // Get empty workspaces from Zustand store (at fetch time)
-          // Find workspaces that exist in Zustand but not in API response (empty workspaces)
-          const currentTabs = useWorkspaceStore.getState().tabs
-          const emptyWorkspaces: V2Workspace.V2WorkspaceGroup[] = currentTabs
-            .filter(tab => !apiWorkspaces.some(ws => ws.workspace === tab.id))
-            .map(tab => ({
-              workspace: tab.id,
-              files: [],
-              count: 0
-            }))
-
-          // Merge API workspaces with empty workspaces
-          setWorkspaces([...apiWorkspaces, ...emptyWorkspaces])
-        } else {
-          setError(response.message || 'Failed to fetch workspaces')
-        }
+        // Fetch workspaces from server (this will also initialize tabs)
+        await fetchWorkspaces(currentRepo.url)
       } catch (err) {
-        console.error('Error fetching workspaces:', err)
-        setError(err instanceof Error ? err.message : 'Unknown error')
-      } finally {
-        setIsLoading(false)
+        console.error('Error initializing workspaces:', err)
       }
     }
 
-    fetchWorkspaces()
-
-    // Listen for workspace file added event from page-header
-    const handleWorkspaceFileAdded = (event: Event) => {
-      const customEvent = event as CustomEvent
-      const { workspaceName, filePath } = customEvent.detail
-      console.log(`File ${filePath} added to workspace ${workspaceName}, refreshing...`)
-
-      // Refetch workspaces to get updated data
-      fetchWorkspaces()
-    }
-
-    window.addEventListener('workspace-file-added', handleWorkspaceFileAdded)
-
-    return () => {
-      window.removeEventListener('workspace-file-added', handleWorkspaceFileAdded)
-    }
-  }, [])
+    initializeWorkspaces()
+  }, [fetchWorkspaces])
 
   const handleSelectionChange = (selectedIds: string[]) => {
     console.log("Selected workspaces:", selectedIds)
@@ -133,16 +77,16 @@ export default function Page() {
           <div className="flex items-center justify-center p-8 animate-in fade-in duration-300">
             <div className="text-destructive">Error: {error}</div>
           </div>
-        ) : workspaces.length === 0 ? (
+        ) : serverWorkspaces.length === 0 ? (
           <div className="flex items-center justify-center p-8 animate-in fade-in duration-300">
             <div className="text-muted-foreground">No workspaces found</div>
           </div>
         ) : (
           <div className="animate-in fade-in duration-500">
             <MultiSelectTabs
-              repoUrl={repoUrl}
-              workspaces={workspaces}
-              defaultSelected={workspaces[0] ? [workspaces[0].workspace] : []}
+              repoUrl={currentRepoUrl}
+              workspaces={serverWorkspaces}
+              defaultSelected={serverWorkspaces[0] ? [serverWorkspaces[0].workspace] : []}
               maxSelected={4}
               onSelectionChange={handleSelectionChange}
             />

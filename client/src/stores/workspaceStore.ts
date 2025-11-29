@@ -9,6 +9,16 @@ export interface Tab {
   count?: number
 }
 
+// Unsaved file stored in localStorage
+export interface UnsavedFile {
+  path: string  // file path (generated or user-provided)
+  filename: string
+  content: string
+  frontmatter?: Record<string, unknown>
+  workspace: string
+  createdAt: number  // timestamp
+}
+
 interface WorkspaceState {
   // State
   currentRepoUrl: string  // Track which repo we're currently viewing
@@ -27,12 +37,24 @@ interface WorkspaceState {
   // Save handlers registry (not persisted)
   saveHandlers: Map<string, () => Promise<void>>  // filePath -> handleSave function
 
+  // Unsaved files (stored in localStorage)
+  unsavedFiles: Map<string, UnsavedFile>  // filePath -> UnsavedFile
+
+  // Server data (not persisted - always fetched fresh)
+  serverWorkspaces: V2Workspace.V2WorkspaceGroup[]
+  isLoadingWorkspaces: boolean
+  workspacesError: string | null
+
   // Actions
   initializeWorkspace: (
     workspaces: V2Workspace.V2WorkspaceGroup[],
     repoUrl: string,
     defaultSelected?: string[]
   ) => void
+
+  // Server data actions
+  fetchWorkspaces: (repoUrl: string) => Promise<void>
+  refreshWorkspaces: () => Promise<void>
 
   setTabs: (tabs: Tab[]) => void
   setSelectedTabs: (selectedTabs: string[]) => void
@@ -70,6 +92,13 @@ interface WorkspaceState {
   getFileWorkspace: (filePath: string) => string | null
   getWorkspaceNames: () => string[]
 
+  // Unsaved file actions
+  addUnsavedFile: (workspaceId: string, file: UnsavedFile) => void
+  updateUnsavedFile: (filePath: string, updates: Partial<UnsavedFile>) => void
+  removeUnsavedFile: (filePath: string) => void
+  getUnsavedFile: (filePath: string) => UnsavedFile | undefined
+  getUnsavedFilesByWorkspace: (workspaceId: string) => UnsavedFile[]
+
   // Reset
   reset: () => void
 }
@@ -86,6 +115,10 @@ const initialState = {
   savingFiles: new Set<string>(),
   savedFiles: new Set<string>(),
   saveHandlers: new Map<string, () => Promise<void>>(),
+  unsavedFiles: new Map<string, UnsavedFile>(),
+  serverWorkspaces: [],
+  isLoadingWorkspaces: false,
+  workspacesError: null,
 }
 
 // Custom storage that uses repoUrl as part of the key
@@ -552,6 +585,147 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         return tabs.map(tab => tab.id)
       },
 
+      // Unsaved file actions
+      addUnsavedFile: (workspaceId, file) => {
+        const { unsavedFiles } = get()
+        const newUnsavedFiles = new Map(unsavedFiles)
+        newUnsavedFiles.set(file.path, file)
+        set({ unsavedFiles: newUnsavedFiles })
+
+        // Also mark the file as dirty
+        const { dirtyFiles } = get()
+        const newDirtyFiles = new Set(dirtyFiles)
+        newDirtyFiles.add(file.path)
+        set({ dirtyFiles: newDirtyFiles })
+      },
+
+      updateUnsavedFile: (filePath, updates) => {
+        const { unsavedFiles } = get()
+        const existingFile = unsavedFiles.get(filePath)
+        if (!existingFile) {
+          console.warn(`Cannot update unsaved file ${filePath}: file not found`)
+          return
+        }
+
+        const newUnsavedFiles = new Map(unsavedFiles)
+        newUnsavedFiles.set(filePath, { ...existingFile, ...updates })
+        set({ unsavedFiles: newUnsavedFiles })
+      },
+
+      removeUnsavedFile: (filePath) => {
+        const { unsavedFiles } = get()
+        const newUnsavedFiles = new Map(unsavedFiles)
+        newUnsavedFiles.delete(filePath)
+        set({ unsavedFiles: newUnsavedFiles })
+
+        // Also clean up dirty state
+        const { dirtyFiles } = get()
+        const newDirtyFiles = new Set(dirtyFiles)
+        newDirtyFiles.delete(filePath)
+        set({ dirtyFiles: newDirtyFiles })
+      },
+
+      getUnsavedFile: (filePath) => {
+        const { unsavedFiles } = get()
+        return unsavedFiles.get(filePath)
+      },
+
+      getUnsavedFilesByWorkspace: (workspaceId) => {
+        const { unsavedFiles } = get()
+        const result: UnsavedFile[] = []
+        unsavedFiles.forEach(file => {
+          if (file.workspace === workspaceId) {
+            result.push(file)
+          }
+        })
+        return result
+      },
+
+      // Fetch workspaces from server
+      fetchWorkspaces: async (repoUrl: string) => {
+        set({ isLoadingWorkspaces: true, workspacesError: null })
+
+        try {
+          // Dynamic import to avoid circular dependencies
+          const { V2WorkspaceService } = await import('@/services/V2WorkspaceService')
+
+          // Parse repo URL (format: domain/owner/repo)
+          const urlParts = repoUrl.split('/')
+          if (urlParts.length !== 3) {
+            throw new Error('Invalid repo URL format')
+          }
+
+          const [domain, owner, repo] = urlParts
+
+          // Fetch workspaces for this repo
+          const response = await V2WorkspaceService.getWorkspacesByRepoUrl(
+            domain,
+            owner,
+            repo,
+            { limit: 100 }
+          )
+
+          if (response.success && response.data.workspaces) {
+            let apiWorkspaces = response.data.workspaces
+
+            // If no workspaces exist on server and no local workspaces, create default ones
+            const currentTabs = get().tabs
+            const hasNoWorkspaces = apiWorkspaces.length === 0 && currentTabs.length === 0
+
+            if (hasNoWorkspaces) {
+              // Initialize with default 4 workspaces
+              const defaultWorkspaceNames = ['Urgent&Important', 'Important', 'Urgent', 'Normal']
+              apiWorkspaces = defaultWorkspaceNames.map(name => ({
+                workspace: name,
+                files: [],
+                count: 0
+              }))
+              console.log('[Workspace] No workspaces found. Initializing with default workspaces:', defaultWorkspaceNames)
+            }
+
+            // Get empty workspaces from Zustand store (workspaces created locally but not yet on server)
+            const emptyWorkspaces: V2Workspace.V2WorkspaceGroup[] = currentTabs
+              .filter(tab => !apiWorkspaces.some(ws => ws.workspace === tab.id))
+              .map(tab => ({
+                workspace: tab.id,
+                files: [],
+                count: 0
+              }))
+
+            // Merge API workspaces with empty workspaces
+            const allWorkspaces = [...apiWorkspaces, ...emptyWorkspaces]
+
+            set({
+              serverWorkspaces: allWorkspaces,
+              isLoadingWorkspaces: false,
+              workspacesError: null
+            })
+
+            // Also initialize workspace tabs
+            get().initializeWorkspace(allWorkspaces, repoUrl)
+          } else {
+            set({
+              workspacesError: response.message || 'Failed to fetch workspaces',
+              isLoadingWorkspaces: false
+            })
+          }
+        } catch (err) {
+          console.error('Error fetching workspaces:', err)
+          set({
+            workspacesError: err instanceof Error ? err.message : 'Unknown error',
+            isLoadingWorkspaces: false
+          })
+        }
+      },
+
+      // Refresh workspaces using current repo URL
+      refreshWorkspaces: async () => {
+        const { currentRepoUrl, fetchWorkspaces } = get()
+        if (currentRepoUrl) {
+          await fetchWorkspaces(currentRepoUrl)
+        }
+      },
+
       reset: () => set(initialState),
     }),
     {
@@ -563,8 +737,23 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         tabs: state.tabs,
         selectedTabs: state.selectedTabs,
         openAccordions: state.openAccordions,
+        unsavedFiles: Array.from(state.unsavedFiles.entries()),  // Convert Map to array for JSON serialization
         // Don't persist UI states like archivingFiles and removingFiles
       }),
+      merge: (persistedState: unknown, currentState) => {
+        // Convert unsavedFiles array back to Map when loading from localStorage
+        const merged = {
+          ...currentState,
+          ...(persistedState as Record<string, unknown>),
+        }
+
+        const state = persistedState as { unsavedFiles?: [string, UnsavedFile][] }
+        if (state?.unsavedFiles && Array.isArray(state.unsavedFiles)) {
+          merged.unsavedFiles = new Map(state.unsavedFiles)
+        }
+
+        return merged
+      },
     }
   )
 )

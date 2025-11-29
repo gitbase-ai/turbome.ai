@@ -1,6 +1,6 @@
 {
   "name": "turbome",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "A powerful markdown-based workspace and knowledge management system with Git integration",
   "private": false,
   "bin": {
